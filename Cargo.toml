@@ -1,0 +1,11 @@
+[package]
+name = "kerbalobjects"
+version = "1.0.0"
+authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
+edition = "2018"
+license = "GPL-3.0"
+description = "A crate that allows you to read or write a KerbalObject file."
+readme = "README.md"
+homepage = "https://github.com/newcomb-luke/kerbalobjects.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
