@@ -162,6 +162,7 @@ impl SymbolTable {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Symbol {
     name_index: usize,
     value_index: usize,
