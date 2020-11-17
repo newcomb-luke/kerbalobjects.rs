@@ -107,6 +107,14 @@ impl RelInstruction {
         })
     }
 
+    pub fn get_opcode(&self) -> u8 {
+        self.opcode
+    }
+
+    pub fn get_operands(&self) -> &Vec<u32> {
+        &self.operands
+    }
+
     pub fn debug_print(&self) {
         print!("\t\tOpcode: {:02x}, ", self.opcode);
 
