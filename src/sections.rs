@@ -142,6 +142,10 @@ impl SymbolTable {
         }
     }
 
+    pub fn get_symbols(&self) -> &Vec<Symbol> {
+        &self.symbols
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -324,6 +328,10 @@ impl SymbolDataSection {
             Some(s) => Ok(s),
             None => Err(format!("Could not find value at index {} in symbol data section.", index).into()),
         }
+    }
+
+    pub fn get_values(&self) -> &Vec<KOSValue> {
+        &self.values
     }
 
     pub fn name(&self) -> &String {
