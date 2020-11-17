@@ -1,4 +1,5 @@
-use std::{error::Error};
+use std::{error::Error, hash::Hash, hash::Hasher};
+use std::collections::{HashMap, hash_map::DefaultHasher};
 
 use crate::{KOFileReader, KOFileWriter, SectionHeader, RelInstruction};
 
@@ -26,7 +27,7 @@ impl StringTable {
         let mut strtab = StringTable::new(header.name());
 
         while strtab.size() < header.section_size() {
-            strtab.add(&reader.read_string()?);
+            strtab.add_no_check(&reader.read_string()?);
         }
 
         if strtab.size() > header.section_size() {
@@ -51,6 +52,24 @@ impl StringTable {
     }
 
     pub fn add(&mut self, s: &str) -> usize {
+
+        let strval = s.to_owned();
+
+        if self.strings.contains(&strval) {
+            match self.strings.binary_search(&strval) {
+                Ok(idx) => { return idx; },
+                _ => unreachable!()
+            }
+        }
+
+        self.strings.push(strval);
+
+        self.size += s.len() as u32 + 1;
+
+        self.strings.len() - 1
+    }
+
+    pub fn add_no_check(&mut self, s: &str) -> usize {
 
         self.strings.push(s.to_owned());
 
@@ -85,6 +104,7 @@ pub struct SymbolTable {
     symbols: Vec<Symbol>,
     name: String,
     size: u32,
+    hash_to_index: HashMap<u64, usize>,
 }
 
 impl SymbolTable {
@@ -94,6 +114,7 @@ impl SymbolTable {
             symbols: Vec::new(),
             name: name.to_owned(),
             size: 0,
+            hash_to_index: HashMap::new(),
         }
     }
 
@@ -102,7 +123,7 @@ impl SymbolTable {
         let mut symtab = SymbolTable::new(header.name());
 
         while symtab.size() < header.section_size() {
-            symtab.add(Symbol::read(symstrtab, symdata, reader)?);
+            symtab.add_no_check(Symbol::read(symstrtab, symdata, reader)?);
         }
 
         if symtab.size() > header.section_size() {
@@ -128,6 +149,25 @@ impl SymbolTable {
 
     pub fn add(&mut self, s: Symbol) -> usize {
 
+        let mut hasher = DefaultHasher::new();
+        s.hash(&mut hasher);
+        let s_hash = hasher.finish();
+
+        let s_index = self.symbols.len();
+
+        match self.hash_to_index.get(&s_hash) {
+            Some(index) => { return *index; },
+            None => { self.hash_to_index.insert(s_hash, s_index); }
+        }
+
+        self.symbols.push(s);
+
+        self.size += self.symbols.last().unwrap().width();
+
+        s_index
+    }
+
+    pub fn add_no_check(&mut self, s: Symbol) -> usize {
         self.symbols.push(s);
 
         self.size += self.symbols.last().unwrap().width();
@@ -172,6 +212,12 @@ pub struct Symbol {
     info: SymbolInfo,
     symbol_type: SymbolType,
     section_index: usize,
+}
+
+impl Hash for Symbol {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.to_string().hash(state);
+    }
 }
 
 impl Symbol {
@@ -268,12 +314,17 @@ impl Symbol {
         println!("Section index: {}", self.section_index);
     }
 
+    pub fn to_string(&self) -> String {
+        format!("{}:{}:{}:{:?}:{:?}:{}", self.name, self.value_index, self.size, self.info, self.symbol_type, self.section_index)
+    }
+
 }
 
 pub struct SymbolDataSection {
     values: Vec<KOSValue>,
     name: String,
     size: u32,
+    hash_to_index: HashMap<u64, usize>,
 }
 
 impl SymbolDataSection {
@@ -282,7 +333,8 @@ impl SymbolDataSection {
         SymbolDataSection {
             values: Vec::new(),
             name: name.to_owned(),
-            size: 0
+            size: 0,
+            hash_to_index: HashMap::new(),
         }
     }
 
@@ -293,7 +345,7 @@ impl SymbolDataSection {
         while symdata.size() < header.section_size() {
             let val = KOSValue::read(reader)?;
 
-            symdata.add(val);
+            symdata.add_no_check(val);
         }
 
         if symdata.size() > header.section_size() {
@@ -317,6 +369,21 @@ impl SymbolDataSection {
     }
 
     pub fn add(&mut self, value: KOSValue) -> usize {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        let val_hash = hasher.finish();
+
+        let val_index = self.values.len();
+
+        match self.hash_to_index.get(&val_hash) {
+            Some(index) => { return *index; },
+            None => { self.hash_to_index.insert(val_hash, val_index); }
+        }
+
+        val_index
+    }
+
+    pub fn add_no_check(&mut self, value: KOSValue) -> usize {
         self.values.push(value);
 
         self.size += self.values.last().unwrap().size();
@@ -640,6 +707,13 @@ pub enum KOSValue {
     SCALARDOUBLE(f64),
     BOOLEANVALUE(bool),
     STRINGVALUE(String),
+}
+
+impl Hash for KOSValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let s = format!("{:?}", self);
+        s.hash(state);
+    }
 }
 
 impl KOSValue {
