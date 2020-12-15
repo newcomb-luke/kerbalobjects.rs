@@ -386,7 +386,7 @@ impl SymbolDataSection {
     pub fn add_no_check(&mut self, value: KOSValue) -> usize {
         self.values.push(value);
 
-        self.size += self.values.last().unwrap().size();
+        self.size += self.values.last().unwrap().size() as u32;
 
         self.values.len() - 1
     }
@@ -793,7 +793,7 @@ impl KOSValue {
         Ok(())
     }
 
-    pub fn size(&self) -> u32 {
+    pub fn size(&self) -> u16 {
         match self {
             KOSValue::NULL => 1,
             KOSValue::BOOL(_) => 2,
@@ -802,12 +802,12 @@ impl KOSValue {
             KOSValue::INT32(_) => 5,
             KOSValue::FLOAT(_) => 5,
             KOSValue::DOUBLE(_) => 9,
-            KOSValue::STRING(s) => s.len() as u32 + 2,
+            KOSValue::STRING(s) => s.len() as u16 + 2,
             KOSValue::ARGMARKER => 1,
             KOSValue::SCALARINT(_) => 5,
             KOSValue::SCALARDOUBLE(_) => 9,
             KOSValue::BOOLEANVALUE(_) => 2,
-            KOSValue::STRINGVALUE(s) => s.len() as u32 + 2
+            KOSValue::STRINGVALUE(s) => s.len() as u16 + 2
         }
     }
 
