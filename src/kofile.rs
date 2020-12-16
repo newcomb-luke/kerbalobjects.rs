@@ -244,6 +244,10 @@ impl KOFile {
         }
     }
 
+    pub fn get_subrt_sections(&mut self) -> &Vec<SubrtSection> {
+        &self.subrt_sections
+    }
+
     pub fn add_symbol(&mut self, symbol: Symbol) -> usize {
 
         let mut symbol = symbol;
