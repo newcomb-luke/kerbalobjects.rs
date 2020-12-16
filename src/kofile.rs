@@ -244,7 +244,7 @@ impl KOFile {
         }
     }
 
-    pub fn add_symbol(&mut self, symbol: Symbol) {
+    pub fn add_symbol(&mut self, symbol: Symbol) -> usize {
 
         let mut symbol = symbol;
 
@@ -262,7 +262,7 @@ impl KOFile {
             }
         }
 
-        self.symtab.add(symbol);
+        self.symtab.add(symbol)
     }
 
     pub fn add_subrt_section(&mut self, subrt_section: SubrtSection) {
