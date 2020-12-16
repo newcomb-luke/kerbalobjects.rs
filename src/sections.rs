@@ -375,9 +375,18 @@ impl SymbolDataSection {
 
         let val_index = self.values.len();
 
+        // This checks if a KOSValue that is the same has already been added
         match self.hash_to_index.get(&val_hash) {
+            // If so, we just return the index of that value
             Some(index) => { return *index; },
-            None => { self.hash_to_index.insert(val_hash, val_index); }
+            // If not
+            None => {
+                // Insert the hash and index into our table
+                self.hash_to_index.insert(val_hash, val_index);
+
+                // Then add the value
+                self.add_no_check(value);
+            }
         }
 
         val_index
