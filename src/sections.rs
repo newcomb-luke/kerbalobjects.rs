@@ -3,6 +3,8 @@ use std::collections::{HashMap, hash_map::DefaultHasher};
 
 use crate::{KOFileReader, KOFileWriter, SectionHeader, RelInstruction};
 
+/// Represents a list of strings in a KO file that can be used as the names of
+/// symbols or as file comments or notes
 pub struct StringTable {
     strings: Vec<String>,
     name: String,
@@ -11,6 +13,7 @@ pub struct StringTable {
 
 impl StringTable {
 
+    /// Creates a new string table with the specified name
     pub fn new(name: &str) -> StringTable {
         StringTable {
             strings: vec![String::new()],
@@ -19,6 +22,7 @@ impl StringTable {
         }
     }
 
+    /// Reads the string table from the KO file reader, and returns it
     pub fn read(reader: &mut KOFileReader, header: &SectionHeader) -> Result<StringTable, Box<dyn Error>> {
 
         // Consume that first \0, because the string table is intialized to a length of 1 already
@@ -38,6 +42,7 @@ impl StringTable {
 
     }
 
+    /// Writes the entire string table to the KO file
     pub fn write(&self, writer: &mut KOFileWriter) -> Result<(), Box<dyn Error>> {
 
         for s in self.strings.iter() {
@@ -47,14 +52,21 @@ impl StringTable {
         Ok(())
     }
 
+    /// Returns the size of this string table in bytes
     pub fn size(&self) -> u32 {
         self.size
     }
 
+    /// Adds a string to the string table
+    /// This function checks first to see if the string already exists
+    /// in the string table, which could possibly save space. If it does,
+    /// it returns the index of that string. If it doesn't find it, the
+    /// string is added to the string table.
     pub fn add(&mut self, s: &str) -> usize {
 
         let strval = s.to_owned();
 
+        // Check if this string already exists
         if self.strings.contains(&strval) {
             match self.strings.binary_search(&strval) {
                 Ok(idx) => { return idx; },
@@ -62,22 +74,30 @@ impl StringTable {
             }
         }
 
+        // Add the string to the table
         self.strings.push(strval);
 
+        // Calculate the new size of the string table
         self.size += s.len() as u32 + 1;
 
         self.strings.len() - 1
     }
 
+    /// Adds a string to the string table unconditionally
+    /// Returns the index of the string in the string table
+    /// See add()
     pub fn add_no_check(&mut self, s: &str) -> usize {
 
+        // Add the string to the table
         self.strings.push(s.to_owned());
 
+        // Calculate the new size of the string table
         self.size += s.len() as u32 + 1;
 
         self.strings.len() - 1
     }
 
+    /// Returns the specific string at an index into the internal vector of strings
     pub fn get(&self, index: usize) -> Result<&String, Box<dyn Error>>{
         match self.strings.get(index) {
             Some(s) => Ok(s),
@@ -85,8 +105,14 @@ impl StringTable {
         }
     }
 
+    /// Returns the name of this string table
     pub fn name(&self) -> &String {
         &self.name
+    }
+
+    /// Returns a reference to the internal vector containing all strings in this string table
+    pub fn get_strings(&self) -> &Vec<String> {
+        &self.strings
     }
 
 }

@@ -220,6 +220,7 @@ impl KOFile {
         &self.subrt_sections
     }
 
+    /// Adds a symbol to the symbol table and symbol string tables in the proper way
     pub fn add_symbol(&mut self, symbol: Symbol) -> usize {
 
         let mut symbol = symbol;
@@ -261,14 +262,17 @@ impl KOFile {
         self.debug_section = Some(debug);
     }
 
+    /// Returns the length of the entire file in bytes
     pub fn length(&self) -> u32 {
         self.file_length
     }
 
+    /// Returns the current KO file version number of this file
     pub fn version(&self) -> u8 {
         self.version
     }
 
+    /// Returns the number of sections that this KO file contains
     pub fn num_sections(&self) -> u16 {
         self.number_sections
     }

@@ -59,7 +59,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let mut reader = KOFileReader::new(raw_contents)?;
 
-    let kofile = KOFile::read(&mut reader)?;
+    let _kofile = KOFile::read(&mut reader)?;
 
     Ok(())
 }
