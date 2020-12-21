@@ -261,6 +261,18 @@ impl KOFile {
         self.debug_section = Some(debug);
     }
 
+    pub fn length(&self) -> u32 {
+        self.file_length
+    }
+
+    pub fn version(&self) -> u8 {
+        self.version
+    }
+
+    pub fn num_sections(&self) -> u16 {
+        self.number_sections
+    }
+
     pub fn regenerate_headers(&mut self) {
 
         // Start at 11 because that is how long the KOHeader is
