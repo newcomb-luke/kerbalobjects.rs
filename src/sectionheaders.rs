@@ -75,14 +75,6 @@ impl HeaderTable {
         Ok(())
     }
 
-    pub fn debug_print(&self) {
-        println!("Section header table:");
-
-        for header in self.headers.iter() {
-            header.debug_print();
-        }
-    }
-
 }
 
 pub struct SectionHeader {
@@ -152,14 +144,6 @@ impl SectionHeader {
 
     pub fn name(&self) -> &String {
         &self.section_name
-    }
-
-    pub fn debug_print(&self) {
-        println!("\tType: {:?}", self.get_type());
-        println!("\tOffset: {}", self.offset());
-        println!("\tHeader size: {}", self.size());
-        println!("\tSection size: {}", self.section_size());
-        println!("\tName: {}", self.name());
     }
 
 }

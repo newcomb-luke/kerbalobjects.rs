@@ -89,15 +89,6 @@ impl StringTable {
         &self.name
     }
 
-    pub fn debug_print(&self) {
-        println!("\n\tString table: {}", self.name);
-        println!("\t\tSize: {}", self.size);
-
-        for (i, s) in self.strings.iter().enumerate() {
-            println!("\t\tString {}: \"{}\"", i, s);
-        }
-    }
-
 }
 
 pub struct SymbolTable {
@@ -189,19 +180,10 @@ impl SymbolTable {
     pub fn name(&self) -> &String {
         &self.name
     }
-
-    pub fn debug_print(&self) {
-        println!("\n\tSymbol table: {}", self.name);
-        println!("\t\tSize: {}", self.size);
-
-        for (i, s) in self.symbols.iter().enumerate() {
-            print!("\t\tSymbol {}: ", i);
-
-            s.debug_print();
-        }
-    }
 }
 
+/// Represents a single symbol in an object file.
+/// This can be a function, an object, program data, or anything else.
 #[derive(Debug, Clone)]
 pub struct Symbol {
     name_index: usize,
@@ -222,6 +204,7 @@ impl Hash for Symbol {
 
 impl Symbol {
 
+    /// Creates a new symbol from parts
     pub fn new(name: &str, value: KOSValue, size: u16, info: SymbolInfo, symbol_type: SymbolType, section_index: usize) -> Symbol {
         Symbol {
             name_index: 0,
@@ -235,6 +218,7 @@ impl Symbol {
         }
     }
 
+    /// Reads a symbol from the symbol table of a KO file
     pub fn read(symstrtab: &StringTable, symdata: &SymbolDataSection, reader: &mut KOFileReader) -> Result<Symbol, Box<dyn Error>> {
         let name_index = reader.read_uint32()? as usize;
         let value_index = reader.read_uint32()? as usize;
@@ -255,6 +239,7 @@ impl Symbol {
         })
     }
 
+    /// Write this symbol to a KOFileWriter
     pub fn write(&self, writer: &mut KOFileWriter) -> Result<(), Box<dyn Error>> {
 
         writer.write_uint32(self.name_index as u32)?;
@@ -272,48 +257,48 @@ impl Symbol {
         Ok(())
     }
 
+    /// Returns the size of the data this symbol represents as stored in the KO file
     pub fn size(&self) -> u16 {
         self.size
     }
 
-    /// Symbol table entries are always 14 bytes wide
+    /// Returns the width of one symbol in a symbol table
     pub fn width(&self) -> u32 {
+        // Symbol table entries are always 14 bytes wide
         14
     }
 
+    /// Returns the stored name of this symbol
     pub fn name(&self) -> &String {
         &self.name
     }
 
+    /// Returns the kOS value that this symbol is associated with
     pub fn value(&self) -> &KOSValue {
         &self.value
     }
 
+    /// Returns this symbol's type
     pub fn get_type(&self) -> SymbolType {
         self.symbol_type
     }
 
+    /// Returns the visibility info of this symbol
     pub fn get_info(&self) -> SymbolInfo {
         self.info
     }
 
+    /// Sets the symbol's name's index into the Symbol String Table
     pub fn set_name_index(&mut self, index: usize) {
         self.name_index = index;
     }
 
+    /// Sets the symbol's value's index into the Symbol Data Table
     pub fn set_value_index(&mut self, index: usize) {
         self.value_index = index;
     }
 
-    pub fn debug_print(&self) {
-        print!("Name: {}, ", self.name);
-        print!("Value index: {}, ", self.value_index);
-        print!("Size: {}, ", self.size);
-        print!("Info: {:?}, ", self.info);
-        print!("Type: {:?}, ", self.get_type());
-        println!("Section index: {}", self.section_index);
-    }
-
+    /// Returns a string representation of this symbol that is mostly only useful for hashing
     pub fn to_string(&self) -> String {
         format!("{}:{}:{}:{:?}:{:?}:{}", self.name, self.value_index, self.size, self.info, self.symbol_type, self.section_index)
     }
@@ -415,15 +400,6 @@ impl SymbolDataSection {
         &self.name
     }
 
-    pub fn debug_print(&self) {
-        println!("\n\tSymbol data section: {}", self.name);
-        println!("\t\tSize: {}", self.size);
-
-        for (i, s) in self.values.iter().enumerate() {
-            println!("\t\tValue {}: \"{:?}\"", i, s);
-        }
-    }
-
 }
 
 pub struct RelSection {
@@ -492,15 +468,6 @@ impl RelSection {
         &self.instructions
     }
 
-    pub fn debug_print(&self) {
-        println!("\n\tRel section: {}", self.name);
-        println!("\t\tSize: {}", self.size);
-        
-        for instruction in self.instructions.iter() {
-            instruction.debug_print();
-        }
-    }
-
 }
 
 pub struct SubrtSection {
@@ -566,15 +533,6 @@ impl SubrtSection {
 
     pub fn get_instructions(&self) -> &Vec<RelInstruction> {
         &self.instructions
-    }
-
-    pub fn debug_print(&self) {
-        println!("\nSubrt section: {}", self.name);
-        println!("\t\tSize: {}", self.size);
-        
-        for instruction in self.instructions.iter() {
-            instruction.debug_print();
-        }
     }
 }
 

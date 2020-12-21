@@ -115,14 +115,4 @@ impl RelInstruction {
         &self.operands
     }
 
-    pub fn debug_print(&self) {
-        print!("\t\tOpcode: {:02x}, ", self.opcode);
-
-        for op in self.operands.iter() {
-            print!("{:08x}, ", op);
-        }
-
-        print!("\n");
-    }
-
 }

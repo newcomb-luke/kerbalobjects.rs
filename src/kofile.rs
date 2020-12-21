@@ -47,29 +47,15 @@ impl KOFile {
 
         let (file_length, version, number_sections) = KOHeader::read(reader)?;
 
-        println!("\tFile length: {}", file_length);
-        println!("\tVersion: {}", version);
-        println!("\tNumber sections: {}", number_sections);
-
         let header_table = HeaderTable::read(reader, number_sections)?;
-
-        header_table.debug_print();
 
         header_table.validate_conventions()?;
 
-        println!("Reading symstrtab");
-
         let symstrtab = StringTable::read(reader, header_table.get_header(1)?)?;
-
-        symstrtab.debug_print();
 
         let symdata = SymbolDataSection::read(reader, header_table.get_header(2)?)?;
 
-        symdata.debug_print();
-
         let symtab = SymbolTable::read(reader, header_table.get_header(3)?, &symstrtab, &symdata)?;
-
-        symtab.debug_print();
 
         let mut main_text = None;
         let mut init_section = None;
@@ -93,8 +79,6 @@ impl KOFile {
 
                     let rel = RelSection::read(reader, header_table.get_header(i)?)?;
 
-                    rel.debug_print();
-
                     main_text = Some(rel);
                     is_entry_point = true;
                 }
@@ -105,8 +89,6 @@ impl KOFile {
                     }
                     let rel = RelSection::read(reader, header_table.get_header(i)?)?;
 
-                    rel.debug_print();
-
                     init_section = Some(rel);
                 }
                 else {
@@ -116,15 +98,11 @@ impl KOFile {
 
                 let strtab = StringTable::read(reader, header_table.get_header(i)?)?;
 
-                strtab.debug_print();
-
                 comment_section = Some(strtab);
             } else if header_ref.get_type() == SectionType::DATA {
                 debug_section = Some(DebugSection::read(reader, header_table.get_header(i)?)?);
             } else {
                 let subrt = SubrtSection::read(reader, header_table.get_header(i)?)?;
-
-                subrt.debug_print();
 
                 subrt_sections.push( subrt );
             }
@@ -152,12 +130,6 @@ impl KOFile {
     pub fn write(&mut self, writer: &mut KOFileWriter) -> Result<(), Box<dyn Error>> {
 
         self.regenerate_headers();
-
-        println!("\tFile length: {}", self.file_length);
-        println!("\tVersion: {}", self.version);
-        println!("\tNumber sections: {}", self.number_sections);
-
-        self.header_table.debug_print();
 
         KOHeader::write(writer, (self.file_length, self.version, self.number_sections))?;
 
