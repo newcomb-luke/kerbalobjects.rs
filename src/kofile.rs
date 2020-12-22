@@ -176,17 +176,17 @@ impl KOFile {
     }
 
     /// Returns a reference to the KO file's symbol string table
-    pub fn get_symstrtab(&mut self) -> &StringTable {
+    pub fn get_symstrtab(&self) -> &StringTable {
         &self.symstrtab
     }
 
     /// Returns a reference to the KO file's symbol data section
-    pub fn get_symdata(&mut self) -> &SymbolDataSection {
+    pub fn get_symdata(&self) -> &SymbolDataSection {
         &self.symdata
     }
 
     /// Returns a reference to the KO file's symbol table
-    pub fn get_symtab(&mut self) -> &SymbolTable {
+    pub fn get_symtab(&self) -> &SymbolTable {
         &self.symtab
     }
 
@@ -199,12 +199,12 @@ impl KOFile {
     }
 
     /// Returns a reference to the internal vector of code sections
-    pub fn get_code_sections(&mut self) -> &Vec<RelSection> {
+    pub fn get_code_sections(&self) -> &Vec<RelSection> {
         &self.code_sections
     }
 
     /// Returns a reference to the internal vector of string tables
-    pub fn get_string_tables(&mut self) -> &Vec<StringTable> {
+    pub fn get_string_tables(&self) -> &Vec<StringTable> {
         &self.string_tables
     }
 
