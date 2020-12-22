@@ -150,24 +150,44 @@ impl KOFile {
         self.is_entry_point
     }
 
-    /// Returns the KO file's current header table
-    pub fn get_header_table(&mut self) -> &mut HeaderTable {
+    /// Returns a mutable reference to the KO file's current header table
+    pub fn get_mut_header_table(&mut self) -> &mut HeaderTable {
         &mut self.header_table
     }
 
-    /// Returns a reference to the KO file's symbol string table
-    pub fn get_symstrtab(&mut self) -> &mut StringTable {
+    /// Returns a mutable reference to the KO file's symbol string table
+    pub fn get_mut_symstrtab(&mut self) -> &mut StringTable {
         &mut self.symstrtab
     }
 
-    /// Returns a reference to the KO file's symbol data section
-    pub fn get_symdata(&mut self) -> &mut SymbolDataSection {
+    /// Returns a mutable reference to the KO file's symbol data section
+    pub fn get_mut_symdata(&mut self) -> &mut SymbolDataSection {
         &mut self.symdata
     }
 
-    /// Returns a reference to the KO file's symbol table
-    pub fn get_symtab(&mut self) -> &mut SymbolTable {
+    /// Returns a mutable reference to the KO file's symbol table
+    pub fn get_mut_symtab(&mut self) -> &mut SymbolTable {
         &mut self.symtab
+    }
+
+    /// Returns a reference to the KO file's current header table
+    pub fn get_header_table(&mut self) -> &HeaderTable {
+        &self.header_table
+    }
+
+    /// Returns a reference to the KO file's symbol string table
+    pub fn get_symstrtab(&mut self) -> &StringTable {
+        &self.symstrtab
+    }
+
+    /// Returns a reference to the KO file's symbol data section
+    pub fn get_symdata(&mut self) -> &SymbolDataSection {
+        &self.symdata
+    }
+
+    /// Returns a reference to the KO file's symbol table
+    pub fn get_symtab(&mut self) -> &SymbolTable {
+        &self.symtab
     }
 
     /// Returns an option that either contains this KO file's debug section if it has one, or None
