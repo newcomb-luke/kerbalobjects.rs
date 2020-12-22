@@ -324,6 +324,16 @@ impl Symbol {
         self.value_index = index;
     }
 
+    /// Returns the symbol's value index
+    pub fn get_value_index(&self) -> usize {
+        self.value_index
+    }
+
+    /// Returns the index of the section that this symbol refers to
+    pub fn get_section_index(&self) -> usize {
+        self.section_index
+    }
+
     /// Returns a string representation of this symbol that is mostly only useful for hashing
     pub fn to_string(&self) -> String {
         format!("{}:{}:{}:{:?}:{:?}:{}", self.name, self.value_index, self.size, self.info, self.symbol_type, self.section_index)
