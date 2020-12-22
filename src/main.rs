@@ -1,6 +1,6 @@
 use std::{error::Error, process, fs};
 
-use kerbalobjects::{KOFile, KOFileWriter, KOFileReader, RelSection, RelInstruction, Symbol, StringTable, SymbolTable, SymbolDataSection, KOSValue, SymbolInfo, SymbolType};
+use kerbalobjects::{KOFile, KOFileWriter, KOFileReader, RelSection, RelInstruction, Symbol, KOSValue, SymbolInfo, SymbolType};
 
 fn main() {
 
