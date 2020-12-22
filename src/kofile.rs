@@ -48,7 +48,7 @@ impl KOFile {
 
         // Check if this kerbalobjects library is correct for reading this version of KO file
         if version != FILE_VERSION {
-            return Err(!format("Unable to read KO file. This version of the library reads v{} and the file is v{}", FILE_VERSION, version).into());
+            return Err(format!("Unable to read KO file. This version of the library reads v{} and the file is v{}", FILE_VERSION, version).into());
         }
 
         let header_table = HeaderTable::read(reader, number_sections)?;
