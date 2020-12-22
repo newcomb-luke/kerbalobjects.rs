@@ -17,5 +17,5 @@ pub use sectionheaders::*;
 mod kofile;
 pub use kofile::*;
 
-pub static FILE_VERSION: u8 = 1;
+pub static FILE_VERSION: u8 = 3;
 pub static MAGIC_NUMBER: u32 = 0x666f016b;

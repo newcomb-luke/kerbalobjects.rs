@@ -155,7 +155,7 @@ pub enum SectionType {
     STRTAB,
     REL,
     DATA,
-    SUBRT
+    DEBUG
 }
 
 impl SectionType {
@@ -167,7 +167,7 @@ impl SectionType {
             SectionType::STRTAB => 2,
             SectionType::REL => 3,
             SectionType::DATA => 4,
-            SectionType::SUBRT => 5
+            SectionType::DEBUG => 5,
         }
     }
 
@@ -178,7 +178,7 @@ impl SectionType {
             2 => Ok(SectionType::STRTAB),
             3 => Ok(SectionType::REL),
             4 => Ok(SectionType::DATA),
-            5 => Ok(SectionType::SUBRT),
+            5 => Ok(SectionType::DEBUG),
             b => Err(format!("Section type of {} is not a valid section type.", b).into())
         }
     }

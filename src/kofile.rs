@@ -1,7 +1,8 @@
 use std::{error::Error};
 
-use crate::{FILE_VERSION, MAGIC_NUMBER, KOFileReader, KOFileWriter, HeaderTable, SymbolDataSection, StringTable, SymbolTable, RelSection, DebugSection, SubrtSection, SymbolType, SectionType, SectionHeader, Symbol};
+use crate::{FILE_VERSION, MAGIC_NUMBER, KOFileReader, KOFileWriter, HeaderTable, SymbolDataSection, StringTable, SymbolTable, RelSection, DebugSection, SymbolType, SectionType, SectionHeader, Symbol};
 
+/// A structure that represents an entire KO file
 pub struct KOFile {
     file_length: u32,
     version: u8,
@@ -10,16 +11,15 @@ pub struct KOFile {
     symstrtab: StringTable,
     symdata: SymbolDataSection,
     symtab: SymbolTable,
-    main_text: Option<RelSection>,
-    init_section: Option<RelSection>,
-    comment_section: Option<StringTable>,
     debug_section: Option<DebugSection>,
-    subrt_sections: Vec<SubrtSection>,
+    code_sections: Vec<RelSection>,
+    string_tables: Vec<StringTable>,
     is_entry_point: bool,
 }
 
 impl KOFile {
 
+    /// Creates a new KO file from nothing
     pub fn new() -> KOFile {
         KOFile {
             file_length: 0,
@@ -34,80 +34,63 @@ impl KOFile {
             symstrtab: StringTable::new(".symstrtab"),
             symdata: SymbolDataSection::new(".data"),
             symtab: SymbolTable::new(".symtab"),
-            main_text: None,
-            init_section: None,
-            comment_section: None,
             debug_section: None,
-            subrt_sections: Vec::new(),
+            code_sections: Vec::new(),
+            string_tables: Vec::new(),
             is_entry_point: false
         }
     }
 
+    /// Reads a KO file from the provided reader and returns it if it was successful
     pub fn read(reader: &mut KOFileReader) -> Result<KOFile, Box<dyn Error>> {
 
         let (file_length, version, number_sections) = KOHeader::read(reader)?;
 
         let header_table = HeaderTable::read(reader, number_sections)?;
 
+        // This will validate the KO file's section order conventions
         header_table.validate_conventions()?;
 
+        // Read all of the sections that are supposed to be there
         let symstrtab = StringTable::read(reader, header_table.get_header(1)?)?;
-
         let symdata = SymbolDataSection::read(reader, header_table.get_header(2)?)?;
-
         let symtab = SymbolTable::read(reader, header_table.get_header(3)?, &symstrtab, &symdata)?;
 
-        let mut main_text = None;
-        let mut init_section = None;
-        let mut comment_section = None;
+        let mut code_sections = Vec::new();
+        let mut string_tables = Vec::new();
         let mut debug_section = None;
 
-        let mut subrt_sections = Vec::new();
+        let mut is_entry_point = false;
 
-        let mut is_entry_point= false;
-
+        // All sections after the first 4 that are required
         for i in 4..number_sections as usize {
             let header_ref = header_table.get_header(i)?;
 
-            // If it is a relocatable section, it is the main entry point or the .init section
+            // If it is a relocatable section, it is a function, or the main entry point or the .init section
             if header_ref.get_type() == SectionType::REL {
-                // If it is labeled as .text, read it in as .text
-                if header_ref.name() == ".text" {
-                    if main_text.is_some() {
-                        return Err("Multiple .text sections found in the same file".into());
-                    }
+                // Read in the section
+                let rel = RelSection::read(reader, header_table.get_header(i)?)?;
 
-                    let rel = RelSection::read(reader, header_table.get_header(i)?)?;
-
-                    main_text = Some(rel);
+                // Check if this is a .text section which would make this KO file the entry point of a program
+                if rel.name() == ".text" {
                     is_entry_point = true;
                 }
-                // If it is labeled as .init, read it in as .init
-                else if header_ref.name() == ".init" {
-                    if init_section.is_some() {
-                        return Err("Multiple .init sections found in the same file".into());
-                    }
-                    let rel = RelSection::read(reader, header_table.get_header(i)?)?;
 
-                    init_section = Some(rel);
-                }
-                else {
-                    return Err(format!("Found relocatable instruction section at index {}, but it is not labeled as .text or .init; invalid format.", i).into());
-                }
+                code_sections.push(rel);
+            // We can have random string tables but none of them will be recognized, still add it to the list thought
             } else if header_ref.get_type() == SectionType::STRTAB {
-
+                // Read it
                 let strtab = StringTable::read(reader, header_table.get_header(i)?)?;
 
-                comment_section = Some(strtab);
-            } else if header_ref.get_type() == SectionType::DATA {
+                // Add it
+                string_tables.push(strtab);
+            // If it is a debug section, we can only have one of those per file
+            } else if header_ref.get_type() == SectionType::DEBUG {
                 debug_section = Some(DebugSection::read(reader, header_table.get_header(i)?)?);
-            } else {
-                let subrt = SubrtSection::read(reader, header_table.get_header(i)?)?;
-
-                subrt_sections.push( subrt );
             }
         }
 
+        // Create the struct
         let kofile = KOFile {
             file_length,
             version,
@@ -116,23 +99,25 @@ impl KOFile {
             symstrtab,
             symdata,
             symtab,
-            main_text,
-            init_section,
-            comment_section,
             debug_section,
-            subrt_sections,
+            code_sections,
+            string_tables,
             is_entry_point
         };
 
         Ok(kofile)
     }
 
+    /// Writes a KO file to the provided writer
     pub fn write(&mut self, writer: &mut KOFileWriter) -> Result<(), Box<dyn Error>> {
 
+        // Make sure that all of the section headers are valid
         self.regenerate_headers();
 
+        // Write the magic numbers and other KO file data
         KOHeader::write(writer, (self.file_length, self.version, self.number_sections))?;
 
+        // Does what each says
         self.header_table.write(writer)?;
 
         self.symstrtab.write(writer)?;
@@ -141,74 +126,51 @@ impl KOFile {
 
         self.symtab.write(writer)?;
 
-        match &self.main_text {
-            Some(main) => main.write(writer)?,
-            None => (),
+        // Write each code section
+        for code_section in self.code_sections.iter() {
+            code_section.write(writer)?;
         }
 
-        match &self.init_section {
-            Some(init) => init.write(writer)?,
-            None => (),
+        // Write each string table
+        for string_table in self.string_tables.iter() {
+            string_table.write(writer)?;
         }
 
-        match &self.comment_section {
-            Some(comment) => comment.write(writer)?,
-            None => (),
-        }
-
+        // If we have a debug section, write that
         match &self.debug_section {
             Some(debug) => debug.write(writer)?,
             None => (),
         }
 
-        for subrt_section in self.subrt_sections.iter() {
-            subrt_section.write(writer)?;
-        }
-
         Ok(())
     }
 
+    /// This function returns true if the KO file contains the main .text section
     pub fn is_entry_point(&self) -> bool {
         self.is_entry_point
     }
 
+    /// Returns the KO file's current header table
     pub fn get_header_table(&mut self) -> &mut HeaderTable {
         &mut self.header_table
     }
 
+    /// Returns a reference to the KO file's symbol string table
     pub fn get_symstrtab(&mut self) -> &mut StringTable {
         &mut self.symstrtab
     }
 
+    /// Returns a reference to the KO file's symbol data section
     pub fn get_symdata(&mut self) -> &mut SymbolDataSection {
         &mut self.symdata
     }
 
+    /// Returns a reference to the KO file's symbol table
     pub fn get_symtab(&mut self) -> &mut SymbolTable {
         &mut self.symtab
     }
 
-    pub fn get_main_text(&mut self) -> Option<&mut RelSection> {
-        match &mut self.main_text {
-            Some(main_text) => Some(main_text),
-            None => None,
-        }
-    }
-
-    pub fn get_init(&mut self) -> Option<&mut RelSection> {
-        match &mut self.init_section {
-            Some(init_section) => Some(init_section),
-            None => None,
-        }
-    }
-
-    pub fn get_comment(&mut self) -> Option<&mut StringTable> {
-        match &mut self.comment_section {
-            Some(comment_section) => Some(comment_section),
-            None => None,
-        }
-    }
-
+    /// Returns an option that either contains this KO file's debug section if it has one, or None
     pub fn get_debug(&mut self) -> Option<&mut DebugSection> {
         match &mut self.debug_section {
             Some(debug_section) => Some(debug_section),
@@ -216,8 +178,14 @@ impl KOFile {
         }
     }
 
-    pub fn get_subrt_sections(&mut self) -> &Vec<SubrtSection> {
-        &self.subrt_sections
+    /// Returns a reference to the internal vector of code sections
+    pub fn get_code_sections(&mut self) -> &Vec<RelSection> {
+        &self.code_sections
+    }
+
+    /// Returns a reference to the internal vector of string tables
+    pub fn get_string_tables(&mut self) -> &Vec<StringTable> {
+        &self.string_tables
     }
 
     /// Adds a symbol to the symbol table and symbol string tables in the proper way
@@ -242,22 +210,22 @@ impl KOFile {
         self.symtab.add(symbol)
     }
 
-    pub fn add_subrt_section(&mut self, subrt_section: SubrtSection) {
-        self.subrt_sections.push(subrt_section);
+    /// This function adds a code section to the internal vector of code sections
+    pub fn add_code_section(&mut self, code_section: RelSection) {
+        // Just in case, check if this is a .text section so we know if this is an entry point
+        if code_section.name() == ".text" {
+            self.is_entry_point = true;
+        }
+        // Add it to the vector
+        self.code_sections.push(code_section);
     }
 
-    pub fn set_main_text(&mut self, main_text: RelSection) {
-        self.main_text = Some(main_text);
+    /// This function adds a string table to the internal vector of string tables
+    pub fn add_string_table(&mut self, string_table: StringTable) {
+        self.string_tables.push(string_table);
     }
 
-    pub fn set_init(&mut self, init: RelSection) {
-        self.init_section = Some(init);
-    }
-
-    pub fn set_comment(&mut self, comment: StringTable) {
-        self.comment_section = Some(comment);
-    }
-
+    /// This function sets this KO file's debug section
     pub fn set_debug(&mut self, debug: DebugSection) {
         self.debug_section = Some(debug);
     }
@@ -277,6 +245,7 @@ impl KOFile {
         self.number_sections
     }
 
+    /// Regenerates all section headers and their associated data like sizes and offsets
     pub fn regenerate_headers(&mut self) {
 
         // Start at 11 because that is how long the KOHeader is
@@ -301,45 +270,22 @@ impl KOFile {
         header_size += symtab_sh.size();
         number_sections += 1;
 
-        let mut main_text_sh = match &self.main_text {
-            Some(text) => {
-                let sh = SectionHeader::new(SectionType::REL, 0, text.size(), text.name());
-                header_size += sh.size();
-                number_sections += 1;
-                Some(sh)
-            },
-            None => None
-        };
+        let mut code_shs = Vec::new();
+        let mut string_shs = Vec::new();
 
-        let mut subrt_shs = Vec::new();
-
-        for subrt in self.subrt_sections.iter() {
-            let subrt_sh = SectionHeader::new(SectionType::SUBRT, 0, subrt.size(), subrt.name());
-            header_size += subrt_sh.size();
+        for code_section in self.code_sections.iter() {
+            let code_sh = SectionHeader::new(SectionType::REL, 0, code_section.size(), code_section.name());
+            header_size += code_sh.size();
             number_sections += 1;
-            subrt_shs.push( subrt_sh );
+            code_shs.push(code_sh);
         }
 
-        let mut init_sh = match &self.init_section {
-            Some(init) => {
-                let sh = SectionHeader::new(SectionType::REL, 0, init.size(), init.name());
-                header_size += sh.size();
-                number_sections += 1;
-                Some(sh)
-            },
-            None => None
-        };
-
-        let mut comment_sh = match &self.comment_section {
-            Some(comment) => {
-                let sh = SectionHeader::new(SectionType::STRTAB, 0, comment.size(), comment.name());
-                header_size += sh.size();
-                number_sections += 1;
-                Some(sh)
-            },
-            None => None
-        };
-
+        for string_table in self.string_tables.iter() {
+            let string_sh = SectionHeader::new(SectionType::STRTAB, 0, string_table.size(), string_table.name());
+            header_size += string_sh.size();
+            number_sections += 1;
+            string_shs.push(string_sh);
+        }
         let mut debug_sh = match &self.debug_section {
             Some(debug) => {
                 let sh = SectionHeader::new(SectionType::DATA, 0, debug.size(), debug.name());
@@ -363,33 +309,14 @@ impl KOFile {
         symtab_sh.set_offset(current_offset);
         current_offset += symtab_sh.section_size();
 
-        match &mut main_text_sh {
-            Some(sh) => {
-                sh.set_offset(current_offset);
-                current_offset += sh.section_size();
-            },
-            None => {}
+        for code_sh in code_shs.iter_mut() {
+            code_sh.set_offset(current_offset);
+            current_offset += code_sh.section_size();
         }
 
-        for subrt_sh in subrt_shs.iter_mut() {
-            subrt_sh.set_offset(current_offset);
-            current_offset += subrt_sh.section_size();
-        }
-
-        match &mut init_sh {
-            Some(sh) => {
-                sh.set_offset(current_offset);
-                current_offset += sh.section_size();
-            },
-            None => {}
-        }
-
-        match &mut comment_sh {
-            Some(sh) => {
-                sh.set_offset(current_offset);
-                current_offset += sh.section_size();
-            },
-            None => {}
+        for string_sh in string_shs.iter_mut() {
+            string_sh.set_offset(current_offset);
+            current_offset += string_sh.section_size();
         }
 
         match &mut debug_sh {
@@ -411,29 +338,12 @@ impl KOFile {
             symtab_sh
         ];
 
-        match main_text_sh {
-            Some(text) => {
-                headers.push(text);
-            },
-            None => {}
+        for code_sh in code_shs {
+            headers.push(code_sh);
         }
 
-        for subrt_sh in subrt_shs {
-            headers.push(subrt_sh);
-        }
-
-        match init_sh {
-            Some(init) => {
-                headers.push(init);
-            },
-            None => {}
-        }
-
-        match comment_sh {
-            Some(comment) => {
-                headers.push(comment);
-            },
-            None => {}
+        for string_sh in string_shs {
+            headers.push(string_sh);
         }
 
         match debug_sh {

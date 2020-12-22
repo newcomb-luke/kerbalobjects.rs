@@ -47,7 +47,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     main_text.add(RelInstruction::new(0x3c, Vec::new()));
     main_text.add(RelInstruction::new(0x4c, vec![ 3, 2 ]));
 
-    kofile.set_main_text(main_text);
+    kofile.add_code_section(main_text);
 
     kofile.write(&mut writer)?;
 
@@ -60,6 +60,6 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut reader = KOFileReader::new(raw_contents)?;
 
     let _kofile = KOFile::read(&mut reader)?;
-
+    
     Ok(())
 }
