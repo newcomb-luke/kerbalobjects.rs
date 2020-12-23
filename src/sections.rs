@@ -199,6 +199,18 @@ impl SymbolTable {
         }
     }
 
+    /// Returns the index of the symbol that has the name specified, or an error
+    pub fn get_index_by_name(&self, name: &str) -> Result<usize, Box<dyn Error>> {
+        // Loop through each symbol
+        for (index, sym) in self.symbols.iter().enumerate() {
+            if sym.name == name {
+                return Ok(index);
+            }
+        }
+
+        Err(format!("Could not find symbol by name {} in the symbol table", name).into())
+    }
+
     pub fn get_symbols(&self) -> &Vec<Symbol> {
         &self.symbols
     }

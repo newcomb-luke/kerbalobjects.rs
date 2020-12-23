@@ -195,9 +195,17 @@ impl KOFile {
         &self.symtab
     }
 
-    /// Returns an option that either contains this KO file's debug section if it has one, or None
-    pub fn get_debug(&mut self) -> Option<&mut DebugSection> {
+    /// Returns an option that either contains a mutable reference to this KO file's debug section if it has one, or None
+    pub fn get_mut_debug(&mut self) -> Option<&mut DebugSection> {
         match &mut self.debug_section {
+            Some(debug_section) => Some(debug_section),
+            None => None,
+        }
+    }
+
+    /// Returns an option that either contains a reference to this KO file's debug section if it has one, or None
+    pub fn get_debug(&mut self) -> Option<&DebugSection> {
+        match &self.debug_section {
             Some(debug_section) => Some(debug_section),
             None => None,
         }
@@ -233,6 +241,11 @@ impl KOFile {
         }
 
         self.symtab.add(symbol)
+    }
+
+    /// Tries to fetch a symbol's index from the symbol table by name
+    pub fn get_symbol_index_by_name(&self, name: &str) -> Result<usize, Box<dyn Error>> {
+        self.symtab.get_index_by_name(name)
     }
 
     /// This function adds a code section to the internal vector of code sections
