@@ -233,7 +233,8 @@ impl KOFile {
         match symbol.get_type() {
             SymbolType::FUNC => {},
             SymbolType::SECTION => {},
-            SymbolType::NOTYPE | SymbolType::OBJECT => {
+            SymbolType::FILE => {},
+            SymbolType::NOTYPE => {
                 let value_index = self.symdata.add(symbol.value().clone());
 
                 symbol.set_value_index(value_index);

@@ -772,7 +772,7 @@ pub enum SymbolInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolType {
     NOTYPE,
-    OBJECT,
+    FILE,
     FUNC,
     SECTION
 }
@@ -803,7 +803,7 @@ impl SymbolType {
     pub fn to_byte(&self) -> u8 {
         match self {
             SymbolType::NOTYPE => 0,
-            SymbolType::OBJECT => 1,
+            SymbolType::FILE => 1,
             SymbolType::FUNC => 2,
             SymbolType::SECTION => 3,
         }
@@ -812,7 +812,7 @@ impl SymbolType {
     pub fn from(byte: u8) -> Result<SymbolType, Box<dyn Error>>{
         match byte {
             0 => Ok(SymbolType::NOTYPE),
-            1 => Ok(SymbolType::OBJECT),
+            1 => Ok(SymbolType::FILE),
             2 => Ok(SymbolType::FUNC),
             3 => Ok(SymbolType::SECTION),
             b => Err(format!("Section type of {} is not a valid section type.", b).into())
