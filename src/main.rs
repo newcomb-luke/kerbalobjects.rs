@@ -20,32 +20,36 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let mut kofile = KOFile::new();
 
-    let symbol_2 = Symbol::new("_2", KOSValue::SCALARINT(2), 5, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2);
-
-    let symbol_argmarker = Symbol::new("_argmarker", KOSValue::ARGMARKER, 1, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2);
-
-    let symbol_print = Symbol::new("_print", KOSValue::STRING(String::from("print()")), 9, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2);
-
-    let symbol_empty = Symbol::new("_", KOSValue::STRING(String::new()), 2, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2);
-
-    kofile.add_symbol(symbol_2);
-    kofile.add_symbol(symbol_argmarker);
-    kofile.add_symbol(symbol_print);
-    kofile.add_symbol(symbol_empty);
+    let first_label = kofile.add_symbol(Symbol::new("", KOSValue::STRING(String::from("@0001")), 6, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let _start_func = kofile.add_symbol(Symbol::new("_start", KOSValue::NULL, 0, SymbolInfo::GLOBAL, SymbolType::FUNC, 4));
+    let main_scope = kofile.add_symbol(Symbol::new("", KOSValue::INT16(1), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let outer_scope = kofile.add_symbol(Symbol::new("", KOSValue::INT16(0), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let arg_marker = kofile.add_symbol(Symbol::new("", KOSValue::ARGMARKER, 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let b = kofile.add_symbol(Symbol::new("", KOSValue::BOOL(false), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let lib_name = kofile.add_symbol(Symbol::new("", KOSValue::STRINGVALUE(String::from("loaded")), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let loader_label = kofile.add_symbol(Symbol::new("", KOSValue::STRING(String::from("@LR00")), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let n = kofile.add_symbol(Symbol::new("", KOSValue::NULL, 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let msg = kofile.add_symbol(Symbol::new("", KOSValue::STRINGVALUE(String::from("Loaded.")), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let empty = kofile.add_symbol(Symbol::new("", KOSValue::STRING(String::from("")), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
+    let print = kofile.add_symbol(Symbol::new("", KOSValue::STRING(String::from("print()")), 0, SymbolInfo::LOCAL, SymbolType::NOTYPE, 2));
 
     let mut main_text = RelSection::new(".text");
 
-    // push ARGMARKER
-    // push 2
-    // push 2
-    // add
-    // call print()
-
-    main_text.add(RelInstruction::new(0x4e, vec![ 1 ]));
-    main_text.add(RelInstruction::new(0x4e, vec![ 0 ]));
-    main_text.add(RelInstruction::new(0x4e, vec![ 0 ]));
-    main_text.add(RelInstruction::new(0x3c, Vec::new()));
-    main_text.add(RelInstruction::new(0x4c, vec![ 3, 2 ]));
+    main_text.add(RelInstruction::new(0xf0, vec![ first_label as u32 ]));
+    main_text.add(RelInstruction::new(0x5a, vec![ main_scope as u32, outer_scope as u32 ]));
+    main_text.add(RelInstruction::new(0x60, vec![ ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ arg_marker as u32 ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ arg_marker as u32 ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ b as u32 ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ lib_name as u32 ] ));
+    main_text.add(RelInstruction::new(0x52, vec![ ]));
+    main_text.add(RelInstruction::new(0x4c, vec![ loader_label as u32, n as u32 ] ));
+    main_text.add(RelInstruction::new(0x4f, vec![ ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ arg_marker as u32 ] ));
+    main_text.add(RelInstruction::new(0x4e, vec![ msg as u32 ] ));
+    main_text.add(RelInstruction::new(0x4c, vec![ empty as u32, print as u32 ] ));
+    main_text.add(RelInstruction::new(0x4f, vec![ ] ));
+    main_text.add(RelInstruction::new(0x5b, vec![ main_scope as u32 ] ));
 
     kofile.add_code_section(main_text);
 

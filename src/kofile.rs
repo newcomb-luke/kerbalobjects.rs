@@ -244,11 +244,6 @@ impl KOFile {
         self.symtab.add(symbol)
     }
 
-    /// Tries to fetch a symbol's index from the symbol table by name
-    pub fn get_symbol_index_by_name(&self, name: &str) -> Result<usize, Box<dyn Error>> {
-        self.symtab.get_index_by_name(name)
-    }
-
     /// This function adds a code section to the internal vector of code sections
     pub fn add_code_section(&mut self, code_section: RelSection) {
         // Just in case, check if this is a .text section so we know if this is an entry point

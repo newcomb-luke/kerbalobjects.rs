@@ -201,14 +201,28 @@ impl SymbolTable {
 
     /// Returns the index of the symbol that has the name specified, or an error
     pub fn get_index_by_name(&self, name: &str) -> Result<usize, Box<dyn Error>> {
-        // Loop through each symbol
-        for (index, sym) in self.symbols.iter().enumerate() {
-            if sym.name == name {
-                return Ok(index);
-            }
+
+        match self.symbols.iter().position(|sym| sym.name == name ) {
+            Some(index) => Ok(index),
+            None => Err(format!("Could not find symbol by name {} in the symbol table", name).into())
         }
 
-        Err(format!("Could not find symbol by name {} in the symbol table", name).into())
+    }
+
+    /// This function updates the values of a symbol in the symbol table
+    /// Crutially, it finds the symbol to modify by using the name of the provided symbol and matching it
+    pub fn update_symbol(&mut self, new_symbol: Symbol) -> Result<(), Box<dyn Error>> {
+
+        // Get the index of the old symbol
+        let old_index = self.get_index_by_name(new_symbol.name())?;
+        
+        // Remove the old symbol
+        self.symbols.remove(old_index);
+
+        // Add the new one in its place
+        self.symbols.insert(old_index, new_symbol);
+
+        Ok(())
     }
 
     pub fn get_symbols(&self) -> &Vec<Symbol> {
