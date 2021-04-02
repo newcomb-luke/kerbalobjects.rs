@@ -49,16 +49,17 @@ impl KOHeader {
     pub fn strtab_idx(&self) -> u16 {
         self.strtab_idx
     }
+
+    pub fn size_bytes() -> usize {
+        9
+    }
 }
 
 impl ToBytes for KOHeader {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
-        super::push_32!(self.magic => buf);
-
-        buf.push(self.version);
-
-        super::push_16!(self.num_headers => buf);
-
-        super::push_16!(self.strtab_idx => buf);
+        self.magic.to_bytes(buf);
+        self.version.to_bytes(buf);
+        self.num_headers.to_bytes(buf);
+        self.strtab_idx.to_bytes(buf);
     }
 }

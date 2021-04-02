@@ -1,7 +1,17 @@
+use std::slice::Iter;
+
 pub mod kofile;
 
 pub trait ToBytes {
     fn to_bytes(&self, buf: &mut Vec<u8>);
+}
+
+type FromBytesResult<T> = Result<T, ()>;
+
+pub trait FromBytes {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self>
+    where
+        Self: Sized;
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -21,6 +31,21 @@ pub enum KOSValue<'a> {
     StringValue(&'a str),
 }
 
+impl<'a> KOSValue<'a> {
+    pub fn size_bytes(&self) -> usize {
+        match &self {
+            Self::Null | Self::ArgMarker => 1,
+            Self::Bool(_) | Self::Byte(_) | Self::BoolValue(_) => 2,
+            Self::Int16(_) => 3,
+            Self::Int32(_) | Self::Float(_) | Self::ScalarInt(_) => 5,
+            Self::Double(_) | Self::ScalarDouble(_) => 9,
+            Self::String(s) | Self::StringValue(s) => {
+                2 + s.len() // 1 byte for the type, 1 byte for the length, and then the string
+            }
+        }
+    }
+}
+
 impl<'a> ToBytes for KOSValue<'a> {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         match self {
@@ -29,73 +54,217 @@ impl<'a> ToBytes for KOSValue<'a> {
             }
             Self::Bool(b) => {
                 buf.push(1);
-                buf.push(if *b { 1 } else { 0 });
+                b.to_bytes(buf);
             }
             Self::Byte(b) => {
                 buf.push(2);
-                buf.push(*b as u8);
+                b.to_bytes(buf);
             }
             Self::Int16(i) => {
                 buf.push(3);
-                buf.extend_from_slice(&i.to_le_bytes());
+                i.to_bytes(buf);
             }
             Self::Int32(i) => {
                 buf.push(4);
-                buf.extend_from_slice(&i.to_le_bytes());
+                i.to_bytes(buf);
             }
             Self::Float(f) => {
                 buf.push(5);
-                buf.extend_from_slice(&f.to_le_bytes());
+                f.to_bytes(buf);
             }
             Self::Double(f) => {
                 buf.push(6);
-                buf.extend_from_slice(&f.to_le_bytes());
+                f.to_bytes(buf);
             }
             Self::String(s) => {
                 buf.push(7);
                 buf.push(s.len() as u8);
-                buf.extend_from_slice(s.as_bytes());
+                s.to_bytes(buf);
             }
             Self::ArgMarker => {
                 buf.push(8);
             }
             Self::ScalarInt(i) => {
                 buf.push(9);
-                buf.extend_from_slice(&i.to_le_bytes());
+                i.to_bytes(buf);
             }
             Self::ScalarDouble(f) => {
                 buf.push(10);
-                buf.extend_from_slice(&f.to_le_bytes());
+                f.to_bytes(buf);
             }
             Self::BoolValue(b) => {
                 buf.push(11);
-                buf.push(if *b { 1 } else { 0 });
+                b.to_bytes(buf);
             }
             Self::StringValue(s) => {
                 buf.push(12);
                 buf.push(s.len() as u8);
-                buf.extend_from_slice(s.as_bytes());
+                s.to_bytes(buf);
             }
         }
     }
 }
 
-#[macro_export]
-macro_rules! push_32 {
-    ($value: expr => $buf: ident) => {
-        $buf.push((($value >> 24) & 0xff) as u8);
-        $buf.push((($value >> 16) & 0xff) as u8);
-        $buf.push((($value >> 8) & 0xff) as u8);
-        $buf.push(($value & 0xff) as u8);
-    };
+impl ToBytes for bool {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push(if *self { 1 } else { 0 });
+    }
 }
 
-#[macro_export]
-macro_rules! push_16 {
-    ($value: expr => $buf: ident) => {
-        $buf.push((($value >> 8) & 0xff) as u8);
-        $buf.push(($value & 0xff) as u8);
-    };
+impl ToBytes for u8 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push(*self);
+    }
+}
+
+impl ToBytes for i8 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push((*self) as u8);
+    }
+}
+
+impl ToBytes for u16 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for i16 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for u32 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for i32 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for f32 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for f64 {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&self.to_le_bytes());
+    }
+}
+
+impl ToBytes for &str {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(self.as_bytes());
+    }
+}
+
+impl FromBytes for bool {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        source.next().map(|&x| x == 1).ok_or(())
+    }
+}
+
+impl FromBytes for u8 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        source.next().map(|&x| x).ok_or(())
+    }
+}
+
+impl FromBytes for i8 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        source.next().map(|&x| x as i8).ok_or(())
+    }
+}
+
+impl FromBytes for u16 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 2];
+        for i in 0..2 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(u16::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for i16 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 2];
+        for i in 0..2 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(i16::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for u32 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 4];
+        for i in 0..4 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(u32::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for i32 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 4];
+        for i in 0..4 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(i32::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for f32 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 4];
+        for i in 0..4 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(f32::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for f64 {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let slice = [0u8; 8];
+        for i in 0..8 {
+            if let Some(&byte) = source.next() {
+                slice[i] = byte;
+            } else {
+                return Err(());
+            }
+        }
+        Ok(f64::from_le_bytes(slice))
+    }
 }
 
 #[cfg(test)]

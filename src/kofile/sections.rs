@@ -1,6 +1,6 @@
 use crate::{KOSValue, ToBytes};
 
-use super::symbols::KOSymbol;
+use super::{instructions::Instr, symbols::KOSymbol};
 use std::mem;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -39,6 +39,12 @@ impl From<SectionKind> for u8 {
             SectionKind::Debug => 5,
             SectionKind::Unknown => 255,
         }
+    }
+}
+
+impl ToBytes for SectionKind {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push((*self).into());
     }
 }
 
@@ -99,25 +105,31 @@ impl<'a> SectionHeader<'a> {
     pub fn offset(&self) -> u32 {
         self.offset
     }
+
+    pub fn size_bytes() -> usize {
+        7
+    }
 }
 
 impl<'a> ToBytes for SectionHeader<'a> {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
-        crate::push_32!(self.name_idx => buf);
-        buf.push(self.sh_kind.into());
-        crate::push_32!(self.size => buf);
-        crate::push_32!(self.offset => buf);
+        (self.name_idx as u32).to_bytes(buf);
+        self.sh_kind.to_bytes(buf);
+        self.size.to_bytes(buf);
+        self.offset.to_bytes(buf);
     }
 }
 
 pub struct SymbolTable<'a> {
     symbols: Vec<KOSymbol<'a>>,
+    size: usize,
 }
 
 impl<'a> SymbolTable<'a> {
     pub fn new(amount: usize) -> Self {
         SymbolTable {
             symbols: Vec::with_capacity(amount * mem::size_of::<KOSymbol>()),
+            size: 0,
         }
     }
 
@@ -126,8 +138,13 @@ impl<'a> SymbolTable<'a> {
     }
 
     pub fn add(&mut self, symbol: KOSymbol<'a>) -> usize {
+        self.size += KOSymbol::size_bytes();
         self.symbols.push(symbol);
         self.symbols.len() - 1
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size as u32
     }
 }
 
@@ -177,6 +194,10 @@ impl StringTable {
 
         (index, &self.contents[index..index + new_str.len()])
     }
+
+    pub fn size(&self) -> u32 {
+        self.contents.len() as u32
+    }
 }
 
 impl ToBytes for StringTable {
@@ -187,18 +208,21 @@ impl ToBytes for StringTable {
 
 pub struct DataSection<'a> {
     data: Vec<KOSValue<'a>>,
+    size: usize,
 }
 
 impl<'a> DataSection<'a> {
     pub fn new(amount: usize) -> Self {
         DataSection {
-            data: Vec::with_capacity(amount * mem::size_of::<KOSValue>()),
+            data: Vec::with_capacity(amount),
+            size: 0,
         }
     }
 
     pub fn add(&mut self, value: KOSValue<'a>) -> usize {
         let index = self.data.len();
 
+        self.size += value.size_bytes();
         self.data.push(value);
 
         index
@@ -207,12 +231,55 @@ impl<'a> DataSection<'a> {
     pub fn get(&self, index: usize) -> Option<&KOSValue> {
         self.data.get(index)
     }
+
+    pub fn size(&self) -> u32 {
+        self.size as u32
+    }
 }
 
 impl<'a> ToBytes for DataSection<'a> {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         for value in self.data.iter() {
             value.to_bytes(buf);
+        }
+    }
+}
+
+pub struct RelSection<'sym, 'name> {
+    instructions: Vec<Instr<'sym, 'name>>,
+    size: usize,
+}
+
+impl<'sym, 'name> RelSection<'sym, 'name> {
+    pub fn new(amount: usize) -> Self {
+        RelSection {
+            instructions: Vec::with_capacity(amount),
+            size: 0,
+        }
+    }
+
+    pub fn add(&mut self, instr: Instr<'sym, 'name>) -> usize {
+        let index = self.instructions.len();
+
+        self.size += instr.size_bytes();
+        self.instructions.push(instr);
+
+        index
+    }
+
+    pub fn get(&self, index: usize) -> Option<&Instr> {
+        self.instructions.get(index)
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size as u32
+    }
+}
+
+impl<'sym, 'name> ToBytes for RelSection<'sym, 'name> {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        for instr in self.instructions.iter() {
+            instr.to_bytes(buf);
         }
     }
 }

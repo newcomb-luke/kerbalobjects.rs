@@ -30,6 +30,12 @@ impl From<SymBind> for u8 {
     }
 }
 
+impl ToBytes for SymBind {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push((*self).into());
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SymType {
     NoType,
@@ -63,6 +69,13 @@ impl From<SymType> for u8 {
     }
 }
 
+impl ToBytes for SymType {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.push((*self).into());
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct KOSymbol<'name> {
     name: &'name str,
     name_idx: usize,
@@ -124,15 +137,19 @@ impl<'a> KOSymbol<'a> {
     pub fn sh_idx(&self) -> u16 {
         self.sh_idx
     }
+
+    pub fn size_bytes() -> usize {
+        14
+    }
 }
 
 impl<'a> ToBytes for KOSymbol<'a> {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
-        crate::push_32!(self.name_idx => buf);
-        crate::push_32!(self.value_idx => buf);
-        crate::push_16!(self.size => buf);
-        buf.push(self.sym_bind.into());
-        buf.push(self.sym_type.into());
-        crate::push_16!(self.sh_idx => buf);
+        (self.name_idx as u32).to_bytes(buf);
+        (self.value_idx as u32).to_bytes(buf);
+        self.size.to_bytes(buf);
+        self.sym_bind.to_bytes(buf);
+        self.sym_type.to_bytes(buf);
+        self.sh_idx.to_bytes(buf);
     }
 }
