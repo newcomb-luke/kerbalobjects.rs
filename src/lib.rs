@@ -6,7 +6,7 @@ pub trait ToBytes {
     fn to_bytes(&self, buf: &mut Vec<u8>);
 }
 
-type FromBytesResult<T> = Result<T, ()>;
+pub type FromBytesResult<T> = Result<T, ()>;
 
 pub trait FromBytes {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self>
@@ -14,8 +14,8 @@ pub trait FromBytes {
         Self: Sized;
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum KOSValue<'a> {
+#[derive(Debug, PartialEq, Clone)]
+pub enum KOSValue {
     Null,
     Bool(bool),
     Byte(i8),
@@ -23,15 +23,15 @@ pub enum KOSValue<'a> {
     Int32(i32),
     Float(f32),
     Double(f64),
-    String(&'a str),
+    String(String),
     ArgMarker,
     ScalarInt(i32),
     ScalarDouble(f64),
     BoolValue(bool),
-    StringValue(&'a str),
+    StringValue(String),
 }
 
-impl<'a> KOSValue<'a> {
+impl KOSValue {
     pub fn size_bytes(&self) -> usize {
         match &self {
             Self::Null | Self::ArgMarker => 1,
@@ -46,7 +46,7 @@ impl<'a> KOSValue<'a> {
     }
 }
 
-impl<'a> ToBytes for KOSValue<'a> {
+impl ToBytes for KOSValue {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         match self {
             Self::Null => {
@@ -165,6 +165,12 @@ impl ToBytes for &str {
     }
 }
 
+impl ToBytes for String {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(self.as_bytes());
+    }
+}
+
 impl FromBytes for bool {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
         source.next().map(|&x| x == 1).ok_or(())
@@ -185,7 +191,7 @@ impl FromBytes for i8 {
 
 impl FromBytes for u16 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 2];
+        let mut slice = [0u8; 2];
         for i in 0..2 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -199,7 +205,7 @@ impl FromBytes for u16 {
 
 impl FromBytes for i16 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 2];
+        let mut slice = [0u8; 2];
         for i in 0..2 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -213,7 +219,7 @@ impl FromBytes for i16 {
 
 impl FromBytes for u32 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 4];
+        let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -227,7 +233,7 @@ impl FromBytes for u32 {
 
 impl FromBytes for i32 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 4];
+        let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -241,7 +247,7 @@ impl FromBytes for i32 {
 
 impl FromBytes for f32 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 4];
+        let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -255,7 +261,7 @@ impl FromBytes for f32 {
 
 impl FromBytes for f64 {
     fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
-        let slice = [0u8; 8];
+        let mut slice = [0u8; 8];
         for i in 0..8 {
             if let Some(&byte) = source.next() {
                 slice[i] = byte;
@@ -264,6 +270,26 @@ impl FromBytes for f64 {
             }
         }
         Ok(f64::from_le_bytes(slice))
+    }
+}
+
+impl FromBytes for String {
+    fn from_bytes(source: &mut Iter<u8>) -> FromBytesResult<Self> {
+        let len = match source.next() {
+            Some(v) => *v,
+            None => {
+                return Err(());
+            }
+        };
+        let mut s = String::with_capacity(len as usize);
+        for _ in 0..len {
+            if let Some(&byte) = source.next() {
+                s.push(byte as char);
+            } else {
+                return Err(());
+            }
+        }
+        Ok(s)
     }
 }
 
@@ -362,9 +388,7 @@ mod tests {
 
     #[test]
     fn string_to_bytes() {
-        let s = "test str";
-
-        let v1 = KOSValue::String(s);
+        let v1 = KOSValue::String(String::from("test str"));
 
         let mut buf = Vec::with_capacity(10);
 
@@ -428,9 +452,7 @@ mod tests {
 
     #[test]
     fn stringvalue_to_bytes() {
-        let s = "hello";
-
-        let v1 = KOSValue::StringValue(s);
+        let v1 = KOSValue::StringValue(String::from("hello"));
 
         let mut buf = Vec::with_capacity(7);
 
