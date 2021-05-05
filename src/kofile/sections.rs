@@ -1,4 +1,8 @@
-use crate::{KOSValue, ToBytes};
+use std::slice::Iter;
+
+use crate::{FromBytes, KOSValue, ToBytes};
+
+use super::errors::{ReadError, ReadResult};
 
 use super::{instructions::Instr, symbols::KOSymbol};
 use std::mem;
@@ -48,42 +52,46 @@ impl ToBytes for SectionKind {
     }
 }
 
-pub struct SectionHeader<'name> {
-    name: &'name str,
+impl FromBytes for SectionKind {
+    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    where
+        Self: Sized,
+    {
+        let value = *source.next().ok_or(ReadError::SectionKindReadError)?;
+        let kind = SectionKind::from(value);
+
+        match kind {
+            SectionKind::Unknown => Err(ReadError::UnknownSectionKindReadError(value)),
+            _ => Ok(kind),
+        }
+    }
+}
+
+pub struct SectionHeader {
     name_idx: usize,
     sh_kind: SectionKind,
     size: u32,
-    offset: u32,
 }
 
-impl<'a> SectionHeader<'a> {
+impl SectionHeader {
     pub fn null() -> Self {
         SectionHeader {
-            name: "",
             name_idx: 0,
             sh_kind: SectionKind::Null,
             size: 0,
-            offset: 0,
         }
     }
 
-    pub fn new(name: &'a str, name_idx: usize, sh_kind: SectionKind) -> Self {
+    pub fn new(name_idx: usize, sh_kind: SectionKind) -> Self {
         SectionHeader {
-            name,
             name_idx,
             sh_kind,
             size: 0,
-            offset: 0,
         }
     }
 
-    pub fn set_name(&mut self, name_idx: usize, name: &'a str) {
-        self.name = name;
+    pub fn set_name_idx(&mut self, name_idx: usize) {
         self.name_idx = name_idx;
-    }
-
-    pub fn name(&self) -> &str {
-        self.name
     }
 
     pub fn name_idx(&self) -> usize {
@@ -98,38 +106,55 @@ impl<'a> SectionHeader<'a> {
         self.size
     }
 
-    pub fn set_offset(&mut self, offset: u32) {
-        self.offset = offset;
-    }
-
-    pub fn offset(&self) -> u32 {
-        self.offset
+    pub fn kind(&self) -> SectionKind {
+        self.sh_kind
     }
 
     pub fn size_bytes() -> usize {
-        7
+        9
     }
 }
 
-impl<'a> ToBytes for SectionHeader<'a> {
+impl ToBytes for SectionHeader {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         (self.name_idx as u32).to_bytes(buf);
         self.sh_kind.to_bytes(buf);
         self.size.to_bytes(buf);
-        self.offset.to_bytes(buf);
     }
 }
 
-pub struct SymbolTable<'a> {
-    symbols: Vec<KOSymbol<'a>>,
-    size: usize,
+impl FromBytes for SectionHeader {
+    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    where
+        Self: Sized,
+    {
+        let name_idx = u32::from_bytes(source)
+            .map_err(|_| ReadError::SectionHeaderConstantReadError("name index"))?
+            as usize;
+        let sh_kind = SectionKind::from_bytes(source)?;
+        let size = u32::from_bytes(source)
+            .map_err(|_| ReadError::SectionHeaderConstantReadError("size"))?;
+
+        Ok(SectionHeader {
+            name_idx,
+            sh_kind,
+            size,
+        })
+    }
 }
 
-impl<'a> SymbolTable<'a> {
-    pub fn new(amount: usize) -> Self {
+pub struct SymbolTable {
+    symbols: Vec<KOSymbol>,
+    size: usize,
+    section_index: usize,
+}
+
+impl SymbolTable {
+    pub fn new(amount: usize, section_index: usize) -> Self {
         SymbolTable {
             symbols: Vec::with_capacity(amount * mem::size_of::<KOSymbol>()),
             size: 0,
+            section_index,
         }
     }
 
@@ -137,8 +162,8 @@ impl<'a> SymbolTable<'a> {
         self.symbols.get(index)
     }
 
-    pub fn add(&mut self, symbol: KOSymbol<'a>) -> usize {
-        self.size += KOSymbol::size_bytes();
+    pub fn add(&mut self, symbol: KOSymbol) -> usize {
+        self.size += KOSymbol::size_bytes() as usize;
         self.symbols.push(symbol);
         self.symbols.len() - 1
     }
@@ -146,9 +171,31 @@ impl<'a> SymbolTable<'a> {
     pub fn size(&self) -> u32 {
         self.size as u32
     }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn from_bytes(
+        source: &mut Iter<u8>,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self> {
+        let num_symbols = size / KOSymbol::size_bytes() as usize;
+
+        let mut sym_tab = SymbolTable::new(num_symbols as usize, section_index);
+
+        while (num_symbols * KOSymbol::size_bytes() as usize) < size {
+            let symbol = KOSymbol::from_bytes(source)?;
+
+            sym_tab.add(symbol);
+        }
+
+        Ok(sym_tab)
+    }
 }
 
-impl<'a> ToBytes for SymbolTable<'a> {
+impl ToBytes for SymbolTable {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         for symbol in self.symbols.iter() {
             symbol.to_bytes(buf);
@@ -158,14 +205,18 @@ impl<'a> ToBytes for SymbolTable<'a> {
 
 pub struct StringTable {
     contents: String,
+    section_index: usize,
 }
 
 impl StringTable {
-    pub fn new(size: usize) -> Self {
+    pub fn new(size: usize, section_index: usize) -> Self {
         let mut contents = String::with_capacity(size);
         contents.push('\0');
 
-        StringTable { contents }
+        StringTable {
+            contents,
+            section_index,
+        }
     }
 
     pub fn get(&self, index: usize) -> Option<&str> {
@@ -186,17 +237,41 @@ impl StringTable {
         Some(&self.contents[index..end])
     }
 
-    pub fn add(&mut self, new_str: &str) -> (usize, &str) {
+    pub fn add(&mut self, new_str: &str) -> usize {
         let index = self.contents.len();
 
         self.contents.push_str(new_str);
         self.contents.push('\0');
 
-        (index, &self.contents[index..index + new_str.len()])
+        index
     }
 
     pub fn size(&self) -> u32 {
         self.contents.len() as u32
+    }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn from_bytes(
+        source: &mut Iter<u8>,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self> {
+        let mut s_vec = Vec::with_capacity(size);
+
+        for _ in 0..size {
+            let b = *source.next().ok_or(ReadError::StringTableReadError)?;
+            s_vec.push(b);
+        }
+
+        let contents = String::from_utf8(s_vec).map_err(|_| ReadError::StringTableReadError)?;
+
+        Ok(StringTable {
+            contents,
+            section_index,
+        })
     }
 }
 
@@ -206,20 +281,22 @@ impl ToBytes for StringTable {
     }
 }
 
-pub struct DataSection<'a> {
-    data: Vec<KOSValue<'a>>,
+pub struct DataSection {
+    data: Vec<KOSValue>,
     size: usize,
+    section_index: usize,
 }
 
-impl<'a> DataSection<'a> {
-    pub fn new(amount: usize) -> Self {
+impl DataSection {
+    pub fn new(amount: usize, section_index: usize) -> Self {
         DataSection {
             data: Vec::with_capacity(amount),
             size: 0,
+            section_index,
         }
     }
 
-    pub fn add(&mut self, value: KOSValue<'a>) -> usize {
+    pub fn add(&mut self, value: KOSValue) -> usize {
         let index = self.data.len();
 
         self.size += value.size_bytes();
@@ -235,9 +312,35 @@ impl<'a> DataSection<'a> {
     pub fn size(&self) -> u32 {
         self.size as u32
     }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn from_bytes(
+        source: &mut Iter<u8>,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self> {
+        let mut new_size = 0;
+        let mut data = Vec::new();
+
+        while new_size <= size {
+            let kos_value = KOSValue::from_bytes(source)?;
+            new_size += kos_value.size_bytes();
+
+            data.push(kos_value);
+        }
+
+        Ok(DataSection {
+            data,
+            size,
+            section_index,
+        })
+    }
 }
 
-impl<'a> ToBytes for DataSection<'a> {
+impl ToBytes for DataSection {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         for value in self.data.iter() {
             value.to_bytes(buf);
@@ -245,20 +348,22 @@ impl<'a> ToBytes for DataSection<'a> {
     }
 }
 
-pub struct RelSection<'sym, 'name> {
-    instructions: Vec<Instr<'sym, 'name>>,
+pub struct RelSection {
+    instructions: Vec<Instr>,
     size: usize,
+    section_index: usize,
 }
 
-impl<'sym, 'name> RelSection<'sym, 'name> {
-    pub fn new(amount: usize) -> Self {
+impl RelSection {
+    pub fn new(amount: usize, section_index: usize) -> Self {
         RelSection {
             instructions: Vec::with_capacity(amount),
             size: 0,
+            section_index,
         }
     }
 
-    pub fn add(&mut self, instr: Instr<'sym, 'name>) -> usize {
+    pub fn add(&mut self, instr: Instr) -> usize {
         let index = self.instructions.len();
 
         self.size += instr.size_bytes();
@@ -274,9 +379,35 @@ impl<'sym, 'name> RelSection<'sym, 'name> {
     pub fn size(&self) -> u32 {
         self.size as u32
     }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn from_bytes(
+        source: &mut Iter<u8>,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self> {
+        let mut new_size = 0;
+        let mut instructions = Vec::new();
+
+        while new_size <= size {
+            let instr = Instr::from_bytes(source)?;
+            new_size += instr.size_bytes();
+
+            instructions.push(instr);
+        }
+
+        Ok(RelSection {
+            instructions,
+            size,
+            section_index,
+        })
+    }
 }
 
-impl<'sym, 'name> ToBytes for RelSection<'sym, 'name> {
+impl ToBytes for RelSection {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         for instr in self.instructions.iter() {
             instr.to_bytes(buf);
@@ -291,24 +422,24 @@ mod tests {
 
     #[test]
     fn strtab_insert() {
-        let mut strtab = StringTable::new(8);
+        let mut strtab = StringTable::new(8, 0);
 
-        let (index, s) = strtab.add(".text");
+        let index = strtab.add(".text");
 
         assert_eq!(index, 1);
-        assert_eq!(s, ".text");
+        assert_eq!(strtab.get(index).unwrap(), ".text");
     }
 
     #[test]
     fn strtab_get_null() {
-        let strtab = StringTable::new(8);
+        let strtab = StringTable::new(8, 0);
 
         assert_eq!(strtab.get(0).unwrap(), "");
     }
 
     #[test]
     fn strtab_get_str() {
-        let mut strtab = StringTable::new(8);
+        let mut strtab = StringTable::new(8, 0);
 
         strtab.add("Hello");
 
@@ -317,11 +448,11 @@ mod tests {
 
     #[test]
     fn strtab_get_str_2() {
-        let mut strtab = StringTable::new(16);
+        let mut strtab = StringTable::new(16, 0);
 
         strtab.add("Hello");
 
-        let (index, s) = strtab.add("world");
+        let index = strtab.add("world");
 
         assert_eq!(index, 7);
         assert_eq!(strtab.get(index).unwrap(), "world");
@@ -329,13 +460,13 @@ mod tests {
 
     #[test]
     fn symtab_insert() {
-        let mut strtab = StringTable::new(8);
-        let mut symtab = SymbolTable::new(1);
+        let mut strtab = StringTable::new(8, 0);
+        let mut symtab = SymbolTable::new(1, 0);
 
         let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::NoType, 3);
 
-        let (s_index, s) = strtab.add("fn_add");
-        sym.set_name(s_index, s);
+        let s_index = strtab.add("fn_add");
+        sym.set_name_idx(s_index);
 
         let sym_index = symtab.add(sym);
 
@@ -344,22 +475,27 @@ mod tests {
 
     #[test]
     fn symtab_get() {
-        let mut strtab = StringTable::new(8);
-        let mut symtab = SymbolTable::new(1);
+        let mut strtab = StringTable::new(8, 0);
+        let mut symtab = SymbolTable::new(1, 0);
 
         let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::NoType, 3);
 
-        let (s_index, s) = strtab.add("fn_add");
-        sym.set_name(s_index, s);
+        let s_index = strtab.add("fn_add");
+        sym.set_name_idx(s_index);
 
         let sym_index = symtab.add(sym);
 
-        assert_eq!(symtab.get(sym_index).unwrap().name(), "fn_add");
+        assert_eq!(
+            strtab
+                .get(symtab.get(sym_index).unwrap().name_idx())
+                .unwrap(),
+            "fn_add"
+        );
     }
 
     #[test]
     fn data_insert() {
-        let mut data_section = DataSection::new(1);
+        let mut data_section = DataSection::new(1, 0);
 
         let index = data_section.add(KOSValue::Int32(365));
 
@@ -368,7 +504,7 @@ mod tests {
 
     #[test]
     fn data_insert_2() {
-        let mut data_section = DataSection::new(2);
+        let mut data_section = DataSection::new(2, 0);
 
         data_section.add(KOSValue::ArgMarker);
 
@@ -379,7 +515,7 @@ mod tests {
 
     #[test]
     fn data_get() {
-        let mut data_section = DataSection::new(1);
+        let mut data_section = DataSection::new(1, 0);
 
         let index = data_section.add(KOSValue::Int16(657));
 

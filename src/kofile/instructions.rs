@@ -1,35 +1,16 @@
-use crate::{FromBytes, ToBytes};
+use crate::{FromBytes, ReadResult, ToBytes};
 use std::slice::Iter;
 
-use super::symbols::KOSymbol;
+use super::errors::ReadError;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Operand<'sym, 'name> {
-    symbol: &'sym KOSymbol<'name>,
-    index: usize,
-}
-
-impl<'sym, 'name> Operand<'sym, 'name> {
-    pub fn new(symbol: &'sym KOSymbol<'name>, index: usize) -> Self {
-        Operand { symbol, index }
-    }
-
-    pub fn symbol(&self) -> &KOSymbol {
-        self.symbol
-    }
-
-    pub fn index(&self) -> usize {
-        self.index
-    }
-}
-
-pub enum Instr<'sym, 'name> {
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Instr {
     ZeroOp(Opcode),
-    OneOp(Opcode, Operand<'sym, 'name>),
-    TwoOp(Opcode, Operand<'sym, 'name>, Operand<'sym, 'name>),
+    OneOp(Opcode, usize),
+    TwoOp(Opcode, usize, usize),
 }
 
-impl<'sym, 'name> Instr<'sym, 'name> {
+impl Instr {
     pub fn size_bytes(&self) -> usize {
         match &self {
             Self::ZeroOp(_) => 1,
@@ -39,7 +20,7 @@ impl<'sym, 'name> Instr<'sym, 'name> {
     }
 }
 
-impl<'sym, 'name> ToBytes for Instr<'sym, 'name> {
+impl ToBytes for Instr {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         match self {
             Self::ZeroOp(opcode) => {
@@ -47,24 +28,37 @@ impl<'sym, 'name> ToBytes for Instr<'sym, 'name> {
             }
             Self::OneOp(opcode, operand) => {
                 opcode.to_bytes(buf);
-                (operand.index as u32).to_bytes(buf);
+                (*operand as u32).to_bytes(buf);
             }
             Self::TwoOp(opcode, operand1, operand2) => {
                 opcode.to_bytes(buf);
-                (operand1.index as u32).to_bytes(buf);
-                (operand2.index as u32).to_bytes(buf);
+                (*operand1 as u32).to_bytes(buf);
+                (*operand2 as u32).to_bytes(buf);
             }
         }
     }
 }
 
-impl<'sym, 'name> FromBytes for Instr<'sym, 'name> {
-    fn from_bytes(source: &mut Iter<u8>) -> Self {
-        todo!();
+impl FromBytes for Instr {
+    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self> {
+        let opcode = Opcode::from_bytes(source)?;
+
+        Ok(match opcode.num_operands() {
+            0 => Instr::ZeroOp(opcode),
+            1 => {
+                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                Instr::OneOp(opcode, op1 as usize)
+            }
+            _ => {
+                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                let op2 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                Instr::TwoOp(opcode, op1 as usize, op2 as usize)
+            }
+        })
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
     Bogus,
     Eof,
@@ -121,6 +115,70 @@ pub enum Opcode {
     Lbrt,
 
     Pushv,
+}
+
+impl Opcode {
+    pub fn num_operands(&self) -> usize {
+        match self {
+            Opcode::Eof => 0,
+            Opcode::Eop => 0,
+            Opcode::Nop => 0,
+            Opcode::Sto => 1,
+            Opcode::Uns => 0,
+            Opcode::Gmb => 1,
+            Opcode::Smb => 1,
+            Opcode::Gidx => 0,
+            Opcode::Sidx => 0,
+            Opcode::Bfa => 1,
+            Opcode::Jmp => 1,
+            Opcode::Add => 0,
+            Opcode::Sub => 0,
+            Opcode::Mul => 0,
+            Opcode::Div => 0,
+            Opcode::Pow => 0,
+            Opcode::Cgt => 0,
+            Opcode::Clt => 0,
+            Opcode::Cge => 0,
+            Opcode::Cle => 0,
+            Opcode::Ceq => 0,
+            Opcode::Cne => 0,
+            Opcode::Neg => 0,
+            Opcode::Bool => 0,
+            Opcode::Not => 0,
+            Opcode::And => 0,
+            Opcode::Or => 0,
+            Opcode::Call => 2,
+            Opcode::Ret => 1,
+            Opcode::Push => 1,
+            Opcode::Pop => 0,
+            Opcode::Dup => 0,
+            Opcode::Swap => 0,
+            Opcode::Eval => 0,
+            Opcode::Addt => 2,
+            Opcode::Rmvt => 0,
+            Opcode::Wait => 0,
+            Opcode::Gmet => 1,
+            Opcode::Stol => 1,
+            Opcode::Stog => 1,
+            Opcode::Bscp => 2,
+            Opcode::Escp => 1,
+            Opcode::Stoe => 1,
+            Opcode::Phdl => 2,
+            Opcode::Btr => 1,
+            Opcode::Exst => 0,
+            Opcode::Argb => 0,
+            Opcode::Targ => 0,
+            Opcode::Tcan => 0,
+
+            Opcode::Prl => 1,
+            Opcode::Pdrl => 2,
+            Opcode::Lbrt => 1,
+
+            Opcode::Pushv => 1,
+
+            Opcode::Bogus => 0,
+        }
+    }
 }
 
 impl From<u8> for Opcode {
@@ -319,10 +377,21 @@ impl ToBytes for Opcode {
     }
 }
 
+impl FromBytes for Opcode {
+    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self> {
+        let value = *source.next().ok_or(ReadError::OpcodeReadError)?;
+        let opcode = Opcode::from(value);
+
+        match opcode {
+            Opcode::Bogus => Err(ReadError::BogusOpcodeReadError(value)),
+            _ => Ok(opcode),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kofile::symbols::{KOSymbol, SymBind, SymType};
 
     #[test]
     fn parse_push() {
@@ -334,12 +403,11 @@ mod tests {
 
     #[test]
     fn write_push() {
-        let sym = KOSymbol::new(0, 4, SymBind::Local, SymType::NoType, 0);
-        let instr = Instr::OneOp(Opcode::Push, Operand::new(&sym, 1));
+        let instr = Instr::OneOp(Opcode::Push, 1);
         let mut buf = Vec::with_capacity(4);
 
         instr.to_bytes(&mut buf);
 
-        assert_eq!(buf, vec![0x4e, 0x00, 0x00, 0x00, 0x01]);
+        assert_eq!(buf, vec![0x4e, 0x01, 0x00, 0x00, 0x00]);
     }
 }
