@@ -1,4 +1,5 @@
 use crate::{FromBytes, Opcode, ReadResult, ToBytes};
+use std::iter::Peekable;
 use std::slice::Iter;
 
 use crate::errors::ReadError;
@@ -40,7 +41,7 @@ impl ToBytes for Instr {
 }
 
 impl FromBytes for Instr {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let opcode = Opcode::from_bytes(source)?;
 
         Ok(match opcode.num_operands() {

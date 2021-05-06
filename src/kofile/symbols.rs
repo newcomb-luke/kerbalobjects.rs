@@ -1,3 +1,4 @@
+use std::iter::Peekable;
 use std::slice::Iter;
 
 use crate::{FromBytes, ToBytes};
@@ -41,7 +42,7 @@ impl ToBytes for SymBind {
 }
 
 impl FromBytes for SymBind {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -98,7 +99,7 @@ impl ToBytes for SymType {
 }
 
 impl FromBytes for SymType {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -185,7 +186,7 @@ impl ToBytes for KOSymbol {
 }
 
 impl FromBytes for KOSymbol {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {

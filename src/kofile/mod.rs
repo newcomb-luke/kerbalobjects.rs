@@ -6,6 +6,7 @@ pub mod instructions;
 
 pub mod errors;
 
+use std::iter::Peekable;
 use std::slice::Iter;
 
 use crate::FromBytes;
@@ -209,7 +210,7 @@ impl ToBytes for KOFile {
 }
 
 impl FromBytes for KOFile {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -317,7 +318,7 @@ impl ToBytes for KOHeader {
 }
 
 impl FromBytes for KOHeader {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {

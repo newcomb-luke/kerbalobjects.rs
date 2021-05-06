@@ -1,3 +1,4 @@
+use std::iter::Peekable;
 use std::slice::Iter;
 
 use crate::{FromBytes, KOSValue, ToBytes};
@@ -53,7 +54,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -124,7 +125,7 @@ impl ToBytes for SectionHeader {
 }
 
 impl FromBytes for SectionHeader {
-    fn from_bytes(source: &mut Iter<u8>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -177,7 +178,7 @@ impl SymbolTable {
     }
 
     pub fn from_bytes(
-        source: &mut Iter<u8>,
+        source: &mut Peekable<Iter<u8>>,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -257,7 +258,7 @@ impl StringTable {
     }
 
     pub fn from_bytes(
-        source: &mut Iter<u8>,
+        source: &mut Peekable<Iter<u8>>,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -320,7 +321,7 @@ impl DataSection {
     }
 
     pub fn from_bytes(
-        source: &mut Iter<u8>,
+        source: &mut Peekable<Iter<u8>>,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -387,7 +388,7 @@ impl RelSection {
     }
 
     pub fn from_bytes(
-        source: &mut Iter<u8>,
+        source: &mut Peekable<Iter<u8>>,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {

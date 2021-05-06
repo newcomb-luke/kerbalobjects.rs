@@ -3,12 +3,12 @@ use std::io::{Read, Write};
 use kerbalobjects::{
     kofile::{
         self,
-        instructions::{Instr, Opcode},
+        instructions::Instr,
         sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
         symbols::{KOSymbol, SymBind, SymType},
         KOFile,
     },
-    FromBytes, KOSValue, ToBytes,
+    FromBytes, KOSValue, Opcode, ToBytes,
 };
 
 #[test]
@@ -137,7 +137,7 @@ fn read_kofile() {
     file.read_to_end(&mut buffer)
         .expect("Error reading test.ko");
 
-    let mut buffer_iter = buffer.iter();
+    let mut buffer_iter = buffer.iter().peekable();
 
     let _ko = KOFile::from_bytes(&mut buffer_iter).expect("Error reading KO file");
 }
