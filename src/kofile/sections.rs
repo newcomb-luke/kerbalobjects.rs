@@ -2,7 +2,7 @@ use std::slice::Iter;
 
 use crate::{FromBytes, KOSValue, ToBytes};
 
-use super::errors::{ReadError, ReadResult};
+use crate::errors::{ReadError, ReadResult};
 
 use super::{instructions::Instr, symbols::KOSymbol};
 use std::mem;

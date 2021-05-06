@@ -1,7 +1,7 @@
 use crate::{FromBytes, Opcode, ReadResult, ToBytes};
 use std::slice::Iter;
 
-use super::errors::ReadError;
+use crate::errors::ReadError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instr {

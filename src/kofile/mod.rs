@@ -10,8 +10,10 @@ use std::slice::Iter;
 
 use crate::FromBytes;
 
+use crate::errors::{ReadError, ReadResult};
+
 use self::{
-    errors::{ReadError, ReadResult, UpdateError, UpdateResult},
+    errors::{UpdateError, UpdateResult},
     sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
 };
 
@@ -329,7 +331,7 @@ impl FromBytes for KOHeader {
             .map_err(|_| ReadError::KOHeaderReadError("string table index"))?;
 
         if magic != MAGIC_NUMBER {
-            return Err(ReadError::InvalidFileMagicError);
+            return Err(ReadError::InvalidKOFileMagicError);
         }
 
         if version != FILE_VERSION {

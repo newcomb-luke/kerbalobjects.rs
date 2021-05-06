@@ -1,10 +1,4 @@
-pub type UpdateResult = Result<(), UpdateError>;
 pub type ReadResult<T> = Result<T, ReadError>;
-
-#[derive(Debug)]
-pub enum UpdateError {
-    InvalidSectionIndexError(&'static str, usize),
-}
 
 #[derive(Debug)]
 pub enum ReadError {
@@ -46,19 +40,8 @@ pub enum ConstantReadError {
     StringReadError,
 }
 
-impl std::error::Error for UpdateError {}
 impl std::error::Error for ReadError {}
 impl std::error::Error for ConstantReadError {}
-
-impl std::fmt::Display for UpdateError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UpdateError::InvalidSectionIndexError(section_name, section_index) => {
-                write!(f, "Error updating KOFile headers. Section {} has index {}, which no section header exists for.", section_name, section_index)
-            }
-        }
-    }
-}
 
 impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

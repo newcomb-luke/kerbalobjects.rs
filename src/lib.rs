@@ -1,8 +1,12 @@
 use std::slice::Iter;
 
-use kofile::errors::{ConstantReadError, ReadError, ReadResult};
+pub mod errors;
 
 pub mod kofile;
+
+pub mod ksmfile;
+
+use errors::{ConstantReadError, ReadError, ReadResult};
 
 pub trait ToBytes {
     fn to_bytes(&self, buf: &mut Vec<u8>);

@@ -2,7 +2,7 @@ use std::slice::Iter;
 
 use crate::{FromBytes, ToBytes};
 
-use super::errors::{ReadError, ReadResult};
+use crate::errors::{ReadError, ReadResult};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SymBind {
