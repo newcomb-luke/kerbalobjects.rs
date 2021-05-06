@@ -24,6 +24,7 @@ pub enum ReadError {
     MissingSectionError(&'static str),
     InvalidKOFileMagicError,
     InvalidKSMFileMagicError,
+    KSMDecompressionError(std::io::Error),
 }
 
 #[derive(Debug)]
@@ -160,6 +161,13 @@ impl std::fmt::Display for ReadError {
             }
             ReadError::InvalidKSMFileMagicError => {
                 write!(f, "Error reading Kerbal Machine Code file, input file does not appear to be a KSM file")
+            }
+            ReadError::KSMDecompressionError(e) => {
+                write!(
+                    f,
+                    "Error while trying to decompress Kerbal Machine File: {}",
+                    e
+                )
             }
         }
     }
