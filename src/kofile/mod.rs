@@ -170,7 +170,7 @@ impl ToBytes for KOFile {
             self.section_headers.get(i).unwrap().to_bytes(buf);
 
             if i == 1 {
-                self.sh_strtab.to_bytes(buf);
+                self.sh_strtab.to_bytes(&mut section_buffer);
             } else if i != 0 {
                 for str_tab in self.str_tabs.iter() {
                     if str_tab.section_index() == i {
@@ -218,8 +218,6 @@ impl FromBytes for KOFile {
         let mut data_sections = Vec::new();
         let mut rel_sections = Vec::new();
 
-        println!("Num headers: {}", header.num_headers());
-
         for _ in 0..header.num_headers {
             let header = SectionHeader::from_bytes(source)?;
             section_headers.push(header);
@@ -232,7 +230,7 @@ impl FromBytes for KOFile {
 
         let sh_strtab = StringTable::from_bytes(source, strtab_size, 1)?;
 
-        for i in 0..section_headers.len() {
+        for i in 2..section_headers.len() {
             let header = section_headers.get(i).unwrap();
             let size = header.size() as usize;
 
@@ -329,6 +327,10 @@ impl FromBytes for KOHeader {
             .map_err(|_| ReadError::KOHeaderReadError("number of headers"))?;
         let strtab_idx = u16::from_bytes(source)
             .map_err(|_| ReadError::KOHeaderReadError("string table index"))?;
+
+        if magic != MAGIC_NUMBER {
+            return Err(ReadError::InvalidFileMagicError);
+        }
 
         if version != FILE_VERSION {
             return Err(ReadError::VersionMismatchError(version));

@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use kerbalobjects::{
     kofile::{
@@ -8,10 +8,15 @@ use kerbalobjects::{
         symbols::{KOSymbol, SymBind, SymType},
         KOFile,
     },
-    KOSValue, ToBytes,
+    FromBytes, KOSValue, ToBytes,
 };
 
 #[test]
+fn write_and_read() {
+    write_kofile();
+    read_kofile();
+}
+
 fn write_kofile() {
     let mut ko = KOFile::new();
 
@@ -123,4 +128,16 @@ fn write_kofile() {
 
     file.write_all(file_buffer.as_slice())
         .expect("File test.ko could not be written to.");
+}
+
+fn read_kofile() {
+    let mut buffer = Vec::with_capacity(2048);
+    let mut file = std::fs::File::open("test.ko").expect("Error opening test.ko");
+
+    file.read_to_end(&mut buffer)
+        .expect("Error reading test.ko");
+
+    let mut buffer_iter = buffer.iter();
+
+    let _ko = KOFile::from_bytes(&mut buffer_iter).expect("Error reading KO file");
 }

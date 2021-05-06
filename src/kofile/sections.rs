@@ -182,11 +182,13 @@ impl SymbolTable {
         section_index: usize,
     ) -> ReadResult<Self> {
         let num_symbols = size / KOSymbol::size_bytes() as usize;
+        let mut read_symbols = 0;
 
         let mut sym_tab = SymbolTable::new(num_symbols as usize, section_index);
 
-        while (num_symbols * KOSymbol::size_bytes() as usize) < size {
+        while (read_symbols * KOSymbol::size_bytes() as usize) < size {
             let symbol = KOSymbol::from_bytes(source)?;
+            read_symbols += 1;
 
             sym_tab.add(symbol);
         }
@@ -325,7 +327,7 @@ impl DataSection {
         let mut new_size = 0;
         let mut data = Vec::new();
 
-        while new_size <= size {
+        while new_size < size {
             let kos_value = KOSValue::from_bytes(source)?;
             new_size += kos_value.size_bytes();
 
@@ -392,7 +394,7 @@ impl RelSection {
         let mut new_size = 0;
         let mut instructions = Vec::new();
 
-        while new_size <= size {
+        while new_size < size {
             let instr = Instr::from_bytes(source)?;
             new_size += instr.size_bytes();
 
@@ -520,5 +522,20 @@ mod tests {
         let index = data_section.add(KOSValue::Int16(657));
 
         assert_eq!(data_section.get(index).unwrap(), &KOSValue::Int16(657));
+    }
+
+    #[test]
+    fn write_header() {
+        let mut sh = SectionHeader::new(0, SectionKind::SymTab);
+        sh.set_size(42);
+
+        let mut buf = Vec::new();
+
+        sh.to_bytes(&mut buf);
+
+        assert_eq!(
+            buf,
+            vec![0x00, 0x00, 0x00, 0x00, 0x01, 0x2a, 0x00, 0x00, 0x00]
+        );
     }
 }

@@ -27,6 +27,7 @@ pub enum ReadError {
     VersionMismatchError(u8),
     DebugSectionUnsupportedError,
     MissingSectionError(&'static str),
+    InvalidFileMagicError,
 }
 
 #[derive(Debug)]
@@ -69,7 +70,7 @@ impl std::fmt::Display for ReadError {
             ReadError::BogusOpcodeReadError(v) => {
                 write!(
                     f,
-                    "Error reading opcode for instruction, value {} is not a valid opcode",
+                    "Error reading opcode for instruction, value {:x} is not a valid opcode",
                     v
                 )
             }
@@ -85,7 +86,7 @@ impl std::fmt::Display for ReadError {
             ReadError::UnknownSimBindReadError(v) => {
                 write!(
                     f,
-                    "Error reading symbol binding, unknown binding with value {}",
+                    "Error reading symbol binding, unknown binding with value {:x}",
                     v
                 )
             }
@@ -95,7 +96,7 @@ impl std::fmt::Display for ReadError {
             ReadError::UnknownSimTypeReadError(v) => {
                 write!(
                     f,
-                    "Error reading symbol type, unknown type with value {}",
+                    "Error reading symbol type, unknown type with value {:x}",
                     v
                 )
             }
@@ -107,7 +108,11 @@ impl std::fmt::Display for ReadError {
                 )
             }
             ReadError::KOSValueTypeReadError(v) => {
-                write!(f, "Error reading kOS value, unknown type with value {}", v)
+                write!(
+                    f,
+                    "Error reading kOS value, unknown type with value {:x}",
+                    v
+                )
             }
             ReadError::KOSValueReadError => {
                 write!(f, "Error reading kOS value, ran out of bytes.")
@@ -118,7 +123,7 @@ impl std::fmt::Display for ReadError {
             ReadError::UnknownSectionKindReadError(v) => {
                 write!(
                     f,
-                    "Error reading section kind, unknown kind with value {}",
+                    "Error reading section kind, unknown kind with value {:x}",
                     v
                 )
             }
@@ -157,6 +162,12 @@ impl std::fmt::Display for ReadError {
                     f,
                     "Error reading KerbalObject file, expected section: {}",
                     s
+                )
+            }
+            ReadError::InvalidFileMagicError => {
+                write!(
+                    f,
+                    "Error reading KerbalObject file, input file does not appear to be a KO file"
                 )
             }
         }
