@@ -12,7 +12,7 @@ use kerbalobjects::{
 };
 
 #[test]
-fn write_and_read() {
+fn write_and_read_ko() {
     write_kofile();
     read_kofile();
 }
