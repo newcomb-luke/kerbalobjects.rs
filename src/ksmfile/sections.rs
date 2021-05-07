@@ -4,6 +4,8 @@ use std::slice::Iter;
 
 use crate::{FromBytes, KOSValue, ReadError, ReadResult, ToBytes};
 
+use super::Instr;
+
 pub struct ArgumentSection {
     num_index_bytes: usize,
     arguments: Vec<KOSValue>,
@@ -28,12 +30,13 @@ impl ArgumentSection {
     pub fn add(&mut self, argument: KOSValue) -> usize {
         let size = argument.size_bytes();
         let index = self.arguments.len();
+        let kos_index = self.size_bytes;
 
         self.arguments.push(argument);
         self.kos_index_map.insert(self.size_bytes, index);
         self.size_bytes += size;
 
-        index
+        kos_index
     }
 
     pub fn get(&self, index: usize) -> Option<&KOSValue> {
@@ -173,4 +176,37 @@ impl FromBytes for CodeType {
     }
 }
 
-pub struct CodeSection {}
+pub struct CodeSection {
+    section_type: CodeType,
+    instructions: Vec<Instr>,
+}
+
+impl CodeSection {
+    pub fn new(section_type: CodeType) -> Self {
+        CodeSection {
+            section_type,
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn instructions(&self) -> Iter<Instr> {
+        self.instructions.iter()
+    }
+
+    pub fn add(&mut self, instr: Instr) {
+        self.instructions.push(instr);
+    }
+
+    pub fn section_type(&self) -> CodeType {
+        self.section_type
+    }
+
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, num_index_bytes: usize) {
+        buf.push(b'%');
+        self.section_type.to_bytes(buf);
+
+        for instr in self.instructions.iter() {
+            instr.to_bytes(buf, num_index_bytes);
+        }
+    }
+}

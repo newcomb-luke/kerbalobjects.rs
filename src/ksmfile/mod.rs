@@ -9,18 +9,26 @@ use std::{
     slice::Iter,
 };
 
+use self::sections::ArgumentSection;
+
+pub mod sections;
+
 pub mod instructions;
+
+pub use instructions::Instr;
 
 const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 
 pub struct KSMFile {
     header: KSMHeader,
+    arg_section: ArgumentSection,
 }
 
 impl KSMFile {
     pub fn new() -> Self {
         KSMFile {
             header: KSMHeader::new(),
+            arg_section: ArgumentSection::new(),
         }
     }
 }
@@ -31,6 +39,8 @@ impl ToBytes for KSMFile {
         let mut zipped_contents = Vec::with_capacity(2048);
 
         self.header.to_bytes(&mut uncompressed_buf);
+
+        self.arg_section.to_bytes(&mut uncompressed_buf);
 
         let mut encoder = GzEncoder::new(&mut zipped_contents, Compression::best());
 
@@ -49,7 +59,7 @@ impl ToBytes for KSMFile {
 }
 
 impl FromBytes for KSMFile {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -64,9 +74,14 @@ impl FromBytes for KSMFile {
 
         let mut decompressed_source = decompressed.iter().peekable();
 
-        let header = KSMHeader::from_bytes(&mut decompressed_source)?;
+        let header = KSMHeader::from_bytes(&mut decompressed_source, debug)?;
 
-        let ksm = KSMFile { header };
+        let arg_section = ArgumentSection::from_bytes(&mut decompressed_source, debug)?;
+
+        let ksm = KSMFile {
+            header,
+            arg_section,
+        };
 
         unimplemented!();
     }
@@ -91,12 +106,12 @@ impl ToBytes for KSMHeader {
 }
 
 impl FromBytes for KSMHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let magic =
-            u32::from_bytes(source).map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
+        let magic = u32::from_bytes(source, debug)
+            .map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
 
         if magic != KSM_MAGIC_NUMBER {
             return Err(ReadError::InvalidKSMFileMagicError);
