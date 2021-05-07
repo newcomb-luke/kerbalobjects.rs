@@ -139,5 +139,5 @@ fn read_kofile() {
 
     let mut buffer_iter = buffer.iter().peekable();
 
-    let _ko = KOFile::from_bytes(&mut buffer_iter).expect("Error reading KO file");
+    let _ko = KOFile::from_bytes(&mut buffer_iter, true).expect("Error reading KO file");
 }

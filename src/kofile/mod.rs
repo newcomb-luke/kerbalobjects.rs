@@ -210,11 +210,11 @@ impl ToBytes for KOFile {
 }
 
 impl FromBytes for KOFile {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let header = KOHeader::from_bytes(source)?;
+        let header = KOHeader::from_bytes(source, debug)?;
         let mut section_headers = Vec::with_capacity(header.num_headers() as usize);
         let mut str_tabs = Vec::new();
         let mut sym_tabs = Vec::new();
@@ -222,7 +222,7 @@ impl FromBytes for KOFile {
         let mut rel_sections = Vec::new();
 
         for _ in 0..header.num_headers {
-            let header = SectionHeader::from_bytes(source)?;
+            let header = SectionHeader::from_bytes(source, debug)?;
             section_headers.push(header);
         }
 
@@ -231,7 +231,7 @@ impl FromBytes for KOFile {
             .ok_or(ReadError::MissingSectionError(".shstrtab"))?
             .size() as usize;
 
-        let sh_strtab = StringTable::from_bytes(source, strtab_size, 1)?;
+        let sh_strtab = StringTable::from_bytes(source, debug, strtab_size, 1)?;
 
         for i in 2..section_headers.len() {
             let header = section_headers.get(i).unwrap();
@@ -240,19 +240,19 @@ impl FromBytes for KOFile {
             match header.kind() {
                 sections::SectionKind::Null => {}
                 sections::SectionKind::StrTab => {
-                    let str_tab = StringTable::from_bytes(source, size, i)?;
+                    let str_tab = StringTable::from_bytes(source, debug, size, i)?;
                     str_tabs.push(str_tab);
                 }
                 sections::SectionKind::SymTab => {
-                    let sym_tab = SymbolTable::from_bytes(source, size, i)?;
+                    let sym_tab = SymbolTable::from_bytes(source, debug, size, i)?;
                     sym_tabs.push(sym_tab);
                 }
                 sections::SectionKind::Data => {
-                    let data_section = DataSection::from_bytes(source, size, i)?;
+                    let data_section = DataSection::from_bytes(source, debug, size, i)?;
                     data_sections.push(data_section);
                 }
                 sections::SectionKind::Rel => {
-                    let rel_section = RelSection::from_bytes(source, size, i)?;
+                    let rel_section = RelSection::from_bytes(source, debug, size, i)?;
                     rel_sections.push(rel_section);
                 }
                 sections::SectionKind::Debug => {
@@ -318,17 +318,17 @@ impl ToBytes for KOHeader {
 }
 
 impl FromBytes for KOHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let magic =
-            u32::from_bytes(source).map_err(|_| ReadError::KOHeaderReadError("file magic"))?;
+        let magic = u32::from_bytes(source, debug)
+            .map_err(|_| ReadError::KOHeaderReadError("file magic"))?;
         let version =
-            u8::from_bytes(source).map_err(|_| ReadError::KOHeaderReadError("version"))?;
-        let num_headers = u16::from_bytes(source)
+            u8::from_bytes(source, debug).map_err(|_| ReadError::KOHeaderReadError("version"))?;
+        let num_headers = u16::from_bytes(source, debug)
             .map_err(|_| ReadError::KOHeaderReadError("number of headers"))?;
-        let strtab_idx = u16::from_bytes(source)
+        let strtab_idx = u16::from_bytes(source, debug)
             .map_err(|_| ReadError::KOHeaderReadError("string table index"))?;
 
         if magic != MAGIC_NUMBER {

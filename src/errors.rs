@@ -25,6 +25,13 @@ pub enum ReadError {
     InvalidKOFileMagicError,
     InvalidKSMFileMagicError,
     KSMDecompressionError(std::io::Error),
+    MissingArgumentSectionError,
+    ExpectedArgumentSectionError(u16),
+    NumIndexBytesReadError,
+    InvalidNumIndexBytesError(usize),
+    ArgumentSectionReadError,
+    CodeTypeReadError,
+    UnknownCodeTypeReadError(char),
 }
 
 #[derive(Debug)]
@@ -167,6 +174,31 @@ impl std::fmt::Display for ReadError {
                     f,
                     "Error while trying to decompress Kerbal Machine File: {}",
                     e
+                )
+            }
+            ReadError::MissingArgumentSectionError => {
+                write!(f, "Error reading Kerbal Machine Code file, expected argument section, ran out of bytes.")
+            }
+            ReadError::ExpectedArgumentSectionError(v) => {
+                write!(f, "Error reading Kerbal Machine Code file, expected argument section, instead found {:x}", v)
+            }
+            ReadError::NumIndexBytesReadError => {
+                write!(f, "Error reading Kerbal Machine Code argument section num index bytes, ran out of bytes.")
+            }
+            ReadError::InvalidNumIndexBytesError(n) => {
+                write!(f, "Error reading Kerbal Machine Code argument section num index bytes, invalid number: {}, only values 1-4 permitted.", n)
+            }
+            ReadError::ArgumentSectionReadError => {
+                write!(f, "Error reading Kerbal Machine Code argument section, expected argument, ran out of bytes.")
+            }
+            ReadError::CodeTypeReadError => {
+                write!(f, "Error reading KSM section type, ran out of bytes")
+            }
+            ReadError::UnknownCodeTypeReadError(c) => {
+                write!(
+                    f,
+                    "Error reading KSM section type, unknown type with value: {}",
+                    c
                 )
             }
         }

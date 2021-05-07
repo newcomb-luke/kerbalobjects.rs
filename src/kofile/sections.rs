@@ -54,7 +54,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -125,15 +125,15 @@ impl ToBytes for SectionHeader {
 }
 
 impl FromBytes for SectionHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let name_idx = u32::from_bytes(source)
+        let name_idx = u32::from_bytes(source, debug)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("name index"))?
             as usize;
-        let sh_kind = SectionKind::from_bytes(source)?;
-        let size = u32::from_bytes(source)
+        let sh_kind = SectionKind::from_bytes(source, debug)?;
+        let size = u32::from_bytes(source, debug)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("size"))?;
 
         Ok(SectionHeader {
@@ -179,6 +179,7 @@ impl SymbolTable {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -188,7 +189,7 @@ impl SymbolTable {
         let mut sym_tab = SymbolTable::new(num_symbols as usize, section_index);
 
         while (read_symbols * KOSymbol::size_bytes() as usize) < size {
-            let symbol = KOSymbol::from_bytes(source)?;
+            let symbol = KOSymbol::from_bytes(source, debug)?;
             read_symbols += 1;
 
             sym_tab.add(symbol);
@@ -259,6 +260,7 @@ impl StringTable {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -322,6 +324,7 @@ impl DataSection {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -329,7 +332,7 @@ impl DataSection {
         let mut data = Vec::new();
 
         while new_size < size {
-            let kos_value = KOSValue::from_bytes(source)?;
+            let kos_value = KOSValue::from_bytes(source, debug)?;
             new_size += kos_value.size_bytes();
 
             data.push(kos_value);
@@ -389,6 +392,7 @@ impl RelSection {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -396,7 +400,7 @@ impl RelSection {
         let mut instructions = Vec::new();
 
         while new_size < size {
-            let instr = Instr::from_bytes(source)?;
+            let instr = Instr::from_bytes(source, debug)?;
             new_size += instr.size_bytes();
 
             instructions.push(instr);

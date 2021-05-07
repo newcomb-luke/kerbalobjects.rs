@@ -42,7 +42,7 @@ impl ToBytes for SymBind {
 }
 
 impl FromBytes for SymBind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -99,7 +99,7 @@ impl ToBytes for SymType {
 }
 
 impl FromBytes for SymType {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -186,21 +186,21 @@ impl ToBytes for KOSymbol {
 }
 
 impl FromBytes for KOSymbol {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let name_idx = u32::from_bytes(source)
+        let name_idx = u32::from_bytes(source, debug)
             .map_err(|_| ReadError::KOSymbolConstantReadError("name index"))?
             as usize;
-        let value_idx = u32::from_bytes(source)
+        let value_idx = u32::from_bytes(source, debug)
             .map_err(|_| ReadError::KOSymbolConstantReadError("value index"))?
             as usize;
-        let size =
-            u16::from_bytes(source).map_err(|_| ReadError::KOSymbolConstantReadError("size"))?;
-        let sym_bind = SymBind::from_bytes(source)?;
-        let sym_type = SymType::from_bytes(source)?;
-        let sh_idx = u16::from_bytes(source)
+        let size = u16::from_bytes(source, debug)
+            .map_err(|_| ReadError::KOSymbolConstantReadError("size"))?;
+        let sym_bind = SymBind::from_bytes(source, debug)?;
+        let sym_type = SymType::from_bytes(source, debug)?;
+        let sh_idx = u16::from_bytes(source, debug)
             .map_err(|_| ReadError::KOSymbolConstantReadError("section index"))?;
 
         Ok(KOSymbol {
