@@ -707,7 +707,7 @@ impl ToBytes for Opcode {
 }
 
 impl FromBytes for Opcode {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let value = *source.next().ok_or(ReadError::OpcodeReadError)?;
         let opcode = Opcode::from(value);
 
