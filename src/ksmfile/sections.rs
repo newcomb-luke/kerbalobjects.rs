@@ -209,4 +209,39 @@ impl CodeSection {
             instr.to_bytes(buf, num_index_bytes);
         }
     }
+
+    pub fn from_bytes(
+        source: &mut Peekable<Iter<u8>>,
+        debug: bool,
+        num_index_bytes: usize,
+    ) -> ReadResult<Self> {
+        print!("Reading code section, ");
+
+        let section_type = CodeType::from_bytes(source, debug)?;
+
+        println!("{:?}", section_type);
+
+        let mut instructions = Vec::new();
+
+        loop {
+            if let Some(next) = source.peek() {
+                if **next == b'%' {
+                    break;
+                }
+
+                let instr = Instr::from_bytes(source, debug, num_index_bytes)?;
+
+                println!("\tRead instruction {:?}", instr);
+
+                instructions.push(instr);
+            } else {
+                return Err(ReadError::CodeSectionReadError);
+            }
+        }
+
+        Ok(CodeSection {
+            section_type,
+            instructions,
+        })
+    }
 }

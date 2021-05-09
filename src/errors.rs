@@ -32,6 +32,9 @@ pub enum ReadError {
     ArgumentSectionReadError,
     CodeTypeReadError,
     UnknownCodeTypeReadError(char),
+    MissingCodeSectionError,
+    ExpectedCodeSectionError(u8),
+    CodeSectionReadError,
 }
 
 #[derive(Debug)]
@@ -200,6 +203,19 @@ impl std::fmt::Display for ReadError {
                     "Error reading KSM section type, unknown type with value: {}",
                     c
                 )
+            }
+            ReadError::MissingCodeSectionError => {
+                write!(f, "Error reading code section, ran out of bytes")
+            }
+            ReadError::ExpectedCodeSectionError(b) => {
+                write!(
+                    f,
+                    "Error reading KSM file, expected code section, found {:?}",
+                    b
+                )
+            }
+            ReadError::CodeSectionReadError => {
+                write!(f, "Error reading code section, ran out of bytes")
             }
         }
     }

@@ -2,6 +2,7 @@ use crate::{errors::ReadError, FromBytes, Opcode, ReadResult, ToBytes};
 use std::iter::Peekable;
 use std::slice::Iter;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instr {
     ZeroOp(Opcode),
     OneOp(Opcode, usize),

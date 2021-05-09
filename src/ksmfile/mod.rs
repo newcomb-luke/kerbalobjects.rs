@@ -1,6 +1,9 @@
-use crate::errors::{ReadError, ReadResult};
 use crate::FromBytes;
 use crate::ToBytes;
+use crate::{
+    errors::{ReadError, ReadResult},
+    ksmfile::sections::CodeSection,
+};
 use flate2::write::GzEncoder;
 use flate2::{read::GzDecoder, Compression};
 use std::{
@@ -22,6 +25,7 @@ const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 pub struct KSMFile {
     header: KSMHeader,
     arg_section: ArgumentSection,
+    code_sections: Vec<CodeSection>,
 }
 
 impl KSMFile {
@@ -29,6 +33,7 @@ impl KSMFile {
         KSMFile {
             header: KSMHeader::new(),
             arg_section: ArgumentSection::new(),
+            code_sections: Vec::new(),
         }
     }
 }
@@ -78,9 +83,37 @@ impl FromBytes for KSMFile {
 
         let arg_section = ArgumentSection::from_bytes(&mut decompressed_source, debug)?;
 
+        let mut code_sections = Vec::new();
+
+        loop {
+            let delimiter = u8::from_bytes(&mut decompressed_source, debug)
+                .map_err(|_| ReadError::MissingCodeSectionError)?;
+
+            if delimiter != b'%' {
+                return Err(ReadError::ExpectedCodeSectionError(delimiter));
+            }
+
+            if let Some(next) = decompressed_source.peek() {
+                if **next == b'D' {
+                    break;
+                }
+
+                let code_section = CodeSection::from_bytes(
+                    &mut decompressed_source,
+                    debug,
+                    arg_section.num_index_bytes(),
+                )?;
+
+                code_sections.push(code_section);
+            } else {
+                return Err(ReadError::MissingCodeSectionError);
+            }
+        }
+
         let ksm = KSMFile {
             header,
             arg_section,
+            code_sections,
         };
 
         unimplemented!();
