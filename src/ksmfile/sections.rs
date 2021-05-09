@@ -374,6 +374,39 @@ impl DebugEntry {
     pub fn get(&self, index: usize) -> Option<&DebugRange> {
         self.ranges.get(index)
     }
+
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: usize) {
+        (self.line_number as i16).to_bytes(buf);
+        (self.number_ranges as u8).to_bytes(buf);
+
+        for range in self.ranges.iter() {
+            range.to_bytes(buf, range_size);
+        }
+    }
+
+    pub fn from_bytes(
+        source: &mut Peekable<Iter<u8>>,
+        debug: bool,
+        range_size: usize,
+    ) -> ReadResult<Self> {
+        let line_number =
+            i16::from_bytes(source, debug).map_err(|_| ReadError::DebugEntryReadError)? as isize;
+        let number_ranges =
+            u8::from_bytes(source, debug).map_err(|_| ReadError::DebugEntryReadError)? as usize;
+        let mut ranges = Vec::new();
+
+        for _ in 0..number_ranges {
+            let range = DebugRange::from_bytes(source, debug, range_size)?;
+
+            ranges.push(range);
+        }
+
+        Ok(DebugEntry {
+            line_number,
+            number_ranges,
+            ranges,
+        })
+    }
 }
 
 pub struct DebugSection {

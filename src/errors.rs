@@ -36,6 +36,7 @@ pub enum ReadError {
     ExpectedCodeSectionError(u8),
     CodeSectionReadError,
     DebugRangeReadError,
+    DebugEntryReadError,
 }
 
 #[derive(Debug)]
@@ -220,6 +221,9 @@ impl std::fmt::Display for ReadError {
             }
             ReadError::DebugRangeReadError => {
                 write!(f, "Error reading debug section, ran out of bytes")
+            }
+            ReadError::DebugEntryReadError => {
+                write!(f, "Error reading debug entry, ran out of bytes")
             }
         }
     }
