@@ -700,6 +700,70 @@ impl From<&str> for Opcode {
     }
 }
 
+impl From<Opcode> for &str {
+    fn from(opcode: Opcode) -> Self {
+        match opcode {
+            Opcode::Eof => "eof",
+            Opcode::Eop => "eop",
+            Opcode::Nop => "nop",
+            Opcode::Sto => "sto",
+            Opcode::Uns => "uns",
+            Opcode::Gmb => "gmb",
+            Opcode::Smb => "smb",
+            Opcode::Gidx => "gidx",
+            Opcode::Sidx => "sidx",
+            Opcode::Bfa => "bfa",
+            Opcode::Jmp => "jmp",
+            Opcode::Add => "add",
+            Opcode::Sub => "sub",
+            Opcode::Mul => "mul",
+            Opcode::Div => "div",
+            Opcode::Pow => "pow",
+            Opcode::Cgt => "cgt",
+            Opcode::Clt => "clt",
+            Opcode::Cge => "cge",
+            Opcode::Cle => "cle",
+            Opcode::Ceq => "ceq",
+            Opcode::Cne => "cne",
+            Opcode::Neg => "neg",
+            Opcode::Bool => "bool",
+            Opcode::Not => "not",
+            Opcode::And => "and",
+            Opcode::Or => "or",
+            Opcode::Call => "call",
+            Opcode::Ret => "ret",
+            Opcode::Push => "push",
+            Opcode::Pop => "pop",
+            Opcode::Dup => "dup",
+            Opcode::Swap => "swap",
+            Opcode::Eval => "eval",
+            Opcode::Addt => "addt",
+            Opcode::Rmvt => "rmvt",
+            Opcode::Wait => "wait",
+            Opcode::Gmet => "gmet",
+            Opcode::Stol => "stol",
+            Opcode::Stog => "stog",
+            Opcode::Bscp => "bscp",
+            Opcode::Escp => "ecsp",
+            Opcode::Stoe => "stoe",
+            Opcode::Phdl => "phdl",
+            Opcode::Btr => "btr",
+            Opcode::Exst => "exst",
+            Opcode::Argb => "argb",
+            Opcode::Targ => "targ",
+            Opcode::Tcan => "tcan",
+
+            Opcode::Prl => "prl",
+            Opcode::Pdrl => "pdrl",
+            Opcode::Lbrt => "lbrt",
+
+            Opcode::Pushv => "pushv",
+
+            Opcode::Bogus => "bogus",
+        }
+    }
+}
+
 impl ToBytes for Opcode {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         buf.push((*self).into());
