@@ -12,7 +12,7 @@ use std::{
     slice::Iter,
 };
 
-use self::sections::ArgumentSection;
+use self::sections::{ArgumentSection, DebugSection};
 
 pub mod sections;
 
@@ -26,6 +26,7 @@ pub struct KSMFile {
     header: KSMHeader,
     arg_section: ArgumentSection,
     code_sections: Vec<CodeSection>,
+    debug_section: DebugSection,
 }
 
 impl KSMFile {
@@ -34,7 +35,32 @@ impl KSMFile {
             header: KSMHeader::new(),
             arg_section: ArgumentSection::new(),
             code_sections: Vec::new(),
+            debug_section: DebugSection::new(1),
         }
+    }
+
+    pub fn arg_section(&self) -> &ArgumentSection {
+        &self.arg_section
+    }
+
+    pub fn arg_section_mut(&mut self) -> &mut ArgumentSection {
+        &mut self.arg_section
+    }
+
+    pub fn code_sections(&self) -> Iter<CodeSection> {
+        self.code_sections.iter()
+    }
+
+    pub fn add_code_section(&mut self, code_section: CodeSection) {
+        self.code_sections.push(code_section);
+    }
+
+    pub fn debug_section(&self) -> &DebugSection {
+        &self.debug_section
+    }
+
+    pub fn debug_section_mut(&mut self) -> &mut DebugSection {
+        &mut self.debug_section
     }
 }
 
@@ -49,6 +75,12 @@ impl ToBytes for KSMFile {
 
         let mut encoder = GzEncoder::new(&mut zipped_contents, Compression::best());
 
+        for code_section in self.code_sections.iter() {
+            code_section.to_bytes(&mut uncompressed_buf, self.arg_section.num_index_bytes());
+        }
+
+        self.debug_section.to_bytes(&mut uncompressed_buf);
+
         encoder
             .write_all(&uncompressed_buf)
             .expect("Error compressing KSM file");
@@ -58,8 +90,6 @@ impl ToBytes for KSMFile {
             .expect("Error finishing KSM file compression");
 
         buf.append(&mut zipped_contents);
-
-        unimplemented!();
     }
 }
 
@@ -110,13 +140,16 @@ impl FromBytes for KSMFile {
             }
         }
 
+        let debug_section = DebugSection::from_bytes(&mut decompressed_source, debug)?;
+
         let ksm = KSMFile {
             header,
             arg_section,
             code_sections,
+            debug_section,
         };
 
-        unimplemented!();
+        Ok(ksm)
     }
 }
 

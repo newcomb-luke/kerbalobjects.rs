@@ -239,7 +239,7 @@ impl ToBytes for String {
 }
 
 impl FromBytes for bool {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         source
             .next()
             .map(|&x| x == 1)
@@ -250,7 +250,7 @@ impl FromBytes for bool {
 }
 
 impl FromBytes for u8 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         source
             .next()
             .map(|&x| x)
@@ -259,7 +259,7 @@ impl FromBytes for u8 {
 }
 
 impl FromBytes for i8 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         source
             .next()
             .map(|&x| x as i8)
@@ -268,7 +268,7 @@ impl FromBytes for i8 {
 }
 
 impl FromBytes for u16 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 2];
         for i in 0..2 {
             if let Some(&byte) = source.next() {
@@ -284,7 +284,7 @@ impl FromBytes for u16 {
 }
 
 impl FromBytes for i16 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 2];
         for i in 0..2 {
             if let Some(&byte) = source.next() {
@@ -300,7 +300,7 @@ impl FromBytes for i16 {
 }
 
 impl FromBytes for u32 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
@@ -316,7 +316,7 @@ impl FromBytes for u32 {
 }
 
 impl FromBytes for i32 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
@@ -332,7 +332,7 @@ impl FromBytes for i32 {
 }
 
 impl FromBytes for f32 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
         for i in 0..4 {
             if let Some(&byte) = source.next() {
@@ -348,7 +348,7 @@ impl FromBytes for f32 {
 }
 
 impl FromBytes for f64 {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let mut slice = [0u8; 8];
         for i in 0..8 {
             if let Some(&byte) = source.next() {
@@ -364,7 +364,7 @@ impl FromBytes for f64 {
 }
 
 impl FromBytes for String {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self> {
         let len = match source.next() {
             Some(v) => *v,
             None => {

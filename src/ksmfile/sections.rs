@@ -79,7 +79,9 @@ impl FromBytes for ArgumentSection {
     where
         Self: Sized,
     {
-        println!("Reading ArgumentSection");
+        if debug {
+            println!("Reading ArgumentSection");
+        }
 
         let header =
             u16::from_bytes(source, debug).map_err(|_| ReadError::MissingArgumentSectionError)?;
@@ -96,7 +98,9 @@ impl FromBytes for ArgumentSection {
             return Err(ReadError::InvalidNumIndexBytesError(num_index_bytes));
         }
 
-        println!("\tNumber of index bytes: {}", num_index_bytes);
+        if debug {
+            println!("\tNumber of index bytes: {}", num_index_bytes);
+        }
 
         let mut arg_section = ArgumentSection {
             num_index_bytes,
@@ -112,7 +116,9 @@ impl FromBytes for ArgumentSection {
                 } else {
                     let argument = KOSValue::from_bytes(source, debug)?;
 
-                    println!("\tRead argument: {:?}", argument);
+                    if debug {
+                        println!("\tRead argument: {:?}", argument);
+                    }
 
                     arg_section.add(argument);
                 }
@@ -215,11 +221,15 @@ impl CodeSection {
         debug: bool,
         num_index_bytes: usize,
     ) -> ReadResult<Self> {
-        print!("Reading code section, ");
+        if debug {
+            print!("Reading code section, ");
+        }
 
         let section_type = CodeType::from_bytes(source, debug)?;
 
-        println!("{:?}", section_type);
+        if debug {
+            println!("{:?}", section_type);
+        }
 
         let mut instructions = Vec::new();
 
@@ -231,7 +241,9 @@ impl CodeSection {
 
                 let instr = Instr::from_bytes(source, debug, num_index_bytes)?;
 
-                println!("\tRead instruction {:?}", instr);
+                if debug {
+                    println!("\tRead instruction {:?}", instr);
+                }
 
                 instructions.push(instr);
             } else {
@@ -432,5 +444,53 @@ impl DebugSection {
 
     pub fn range_size(&self) -> usize {
         self.range_size
+    }
+
+    pub fn set_range_size(&mut self, range_size: usize) {
+        self.range_size = range_size
+    }
+}
+
+impl ToBytes for DebugSection {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        b'%'.to_bytes(buf);
+        b'D'.to_bytes(buf);
+
+        (self.range_size as u8).to_bytes(buf);
+
+        for entry in self.debug_entries.iter() {
+            entry.to_bytes(buf, self.range_size);
+        }
+    }
+}
+
+impl FromBytes for DebugSection {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    where
+        Self: Sized,
+    {
+        if let Some(next) = source.next() {
+            if *next != b'D' {
+                Err(ReadError::ExpectedDebugSectionError(*next))
+            } else {
+                let range_size = u8::from_bytes(source, debug)
+                    .map_err(|_| ReadError::DebugSectionReadError)?
+                    as usize;
+                let mut debug_entries = Vec::new();
+
+                while let Some(_) = source.peek() {
+                    let debug_entry = DebugEntry::from_bytes(source, debug, range_size)?;
+
+                    debug_entries.push(debug_entry);
+                }
+
+                Ok(DebugSection {
+                    range_size,
+                    debug_entries,
+                })
+            }
+        } else {
+            Err(ReadError::MissingDebugSectionError)
+        }
     }
 }

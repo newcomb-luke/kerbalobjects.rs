@@ -20,6 +20,8 @@ use self::{
 
 use super::ToBytes;
 
+pub use instructions::Instr;
+
 const FILE_VERSION: u8 = 3;
 const MAGIC_NUMBER: u32 = 0x666f016b;
 

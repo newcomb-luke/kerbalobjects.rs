@@ -37,6 +37,9 @@ pub enum ReadError {
     CodeSectionReadError,
     DebugRangeReadError,
     DebugEntryReadError,
+    MissingDebugSectionError,
+    ExpectedDebugSectionError(u8),
+    DebugSectionReadError,
 }
 
 #[derive(Debug)]
@@ -224,6 +227,19 @@ impl std::fmt::Display for ReadError {
             }
             ReadError::DebugEntryReadError => {
                 write!(f, "Error reading debug entry, ran out of bytes")
+            }
+            ReadError::MissingDebugSectionError => {
+                write!(f, "Error reading KSM file debug section, expected debug section, ran out of bytes")
+            }
+            ReadError::ExpectedDebugSectionError(b) => {
+                write!(
+                    f,
+                    "Error reading KSM file, expected debug section header, found {:?}",
+                    b
+                )
+            }
+            ReadError::DebugSectionReadError => {
+                write!(f, "Error reading KSM file debug section, ran out of bytes")
             }
         }
     }

@@ -54,7 +54,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -260,7 +260,7 @@ impl StringTable {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
+        _debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
