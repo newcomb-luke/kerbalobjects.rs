@@ -74,6 +74,10 @@ impl KOFile {
         self.section_headers.get(index)
     }
 
+    pub fn get_header_name(&self, header: &SectionHeader) -> Option<&str> {
+        self.sh_strtab.get(header.name_idx())
+    }
+
     pub fn add_str_tab(&mut self, str_tab: StringTable) {
         self.str_tabs.push(str_tab);
     }
@@ -88,6 +92,30 @@ impl KOFile {
 
     pub fn add_rel_section(&mut self, rel_section: RelSection) {
         self.rel_sections.push(rel_section);
+    }
+
+    pub fn str_tabs(&self) -> Iter<StringTable> {
+        self.str_tabs.iter()
+    }
+
+    pub fn sym_tabs(&self) -> Iter<SymbolTable> {
+        self.sym_tabs.iter()
+    }
+
+    pub fn data_sections(&self) -> Iter<DataSection> {
+        self.data_sections.iter()
+    }
+
+    pub fn rel_sections(&self) -> Iter<RelSection> {
+        self.rel_sections.iter()
+    }
+
+    pub fn section_headers(&self) -> Iter<SectionHeader> {
+        self.section_headers.iter()
+    }
+
+    pub fn section_count(&self) -> usize {
+        self.section_headers.len()
     }
 
     fn update_section_header(
