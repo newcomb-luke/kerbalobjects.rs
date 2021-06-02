@@ -54,7 +54,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -173,6 +173,10 @@ impl SymbolTable {
         self.size as u32
     }
 
+    pub fn symbols(&self) -> Iter<KOSymbol> {
+        self.symbols.iter()
+    }
+
     pub fn section_index(&self) -> usize {
         self.section_index
     }
@@ -229,16 +233,46 @@ impl StringTable {
         let mut contents_iter = self.contents.chars().skip(index);
 
         loop {
-            let c = contents_iter.next().unwrap();
+            if let Some(c) = contents_iter.next() {
+                if c == '\0' {
+                    break;
+                }
 
-            if c == '\0' {
+                end += c.len_utf8();
+            } else {
                 break;
             }
-
-            end += c.len_utf8();
         }
 
         Some(&self.contents[index..end])
+    }
+
+    pub fn strings(&self) -> Vec<&str> {
+        let mut strs = Vec::new();
+        let mut index = 1;
+        let mut end = index;
+        let mut contents_iter = self.contents.chars();
+
+        while contents_iter.next().is_some() {
+            loop {
+                if let Some(c) = contents_iter.next() {
+                    if c == '\0' {
+                        break;
+                    }
+
+                    end += c.len_utf8();
+                } else {
+                    break;
+                }
+            }
+
+            strs.push(&self.contents[index..end]);
+
+            index += end - index + 1;
+            end = index;
+        }
+
+        strs
     }
 
     pub fn add(&mut self, new_str: &str) -> usize {
@@ -260,7 +294,7 @@ impl StringTable {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        _debug: bool,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -312,6 +346,10 @@ impl DataSection {
 
     pub fn get(&self, index: usize) -> Option<&KOSValue> {
         self.data.get(index)
+    }
+
+    pub fn data(&self) -> Iter<KOSValue> {
+        self.data.iter()
     }
 
     pub fn size(&self) -> u32 {
@@ -384,6 +422,10 @@ impl RelSection {
 
     pub fn size(&self) -> u32 {
         self.size as u32
+    }
+
+    pub fn instructions(&self) -> Iter<Instr> {
+        self.instructions.iter()
     }
 
     pub fn section_index(&self) -> usize {
