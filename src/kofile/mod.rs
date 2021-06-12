@@ -118,6 +118,14 @@ impl KOFile {
         self.section_headers.len()
     }
 
+    pub fn version(&self) -> u8 {
+        self.header.version
+    }
+
+    pub fn strtab_index(&self) -> usize {
+        self.sh_strtab.section_index()
+    }
+
     fn update_section_header(
         &mut self,
         section_name: &'static str,
