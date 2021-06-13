@@ -45,6 +45,10 @@ impl ArgumentSection {
         self.arguments.get(vec_index)
     }
 
+    pub fn arguments(&self) -> Iter<KOSValue> {
+        self.arguments.iter()
+    }
+
     pub fn size_bytes(&self) -> usize {
         self.size_bytes
     }
