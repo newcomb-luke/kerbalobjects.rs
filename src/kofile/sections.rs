@@ -178,7 +178,7 @@ impl SymbolTable {
     }
 
     pub fn section_index(&self) -> usize {
-        self.sction_index
+        self.section_index
     }
 
     pub fn from_bytes(
