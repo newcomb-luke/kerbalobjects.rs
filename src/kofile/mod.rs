@@ -78,6 +78,11 @@ impl KOFile {
         self.sh_strtab.get(header.name_idx())
     }
 
+    pub fn get_header_name_index(&self, index: usize) -> Option<&str> {
+        let header = self.section_headers.get(index)?;
+        self.sh_strtab.get(header.name_idx())
+    }
+
     pub fn add_str_tab(&mut self, str_tab: StringTable) {
         self.str_tabs.push(str_tab);
     }
@@ -108,6 +113,74 @@ impl KOFile {
 
     pub fn rel_sections(&self) -> Iter<RelSection> {
         self.rel_sections.iter()
+    }
+
+    pub fn str_tab_by_name(&self, name: &str) -> Option<&StringTable> {
+        for str_tab in self.str_tabs.iter() {
+            let str_tab_name = match self.get_header_name_index(str_tab.section_index()) {
+                Some(s) => s,
+                None => {
+                    continue;
+                }
+            };
+
+            if name == str_tab_name {
+                return Some(&str_tab);
+            }
+        }
+
+        None
+    }
+
+    pub fn sym_tab_by_name(&self, name: &str) -> Option<&SymbolTable> {
+        for sym_tab in self.sym_tabs.iter() {
+            let sym_tab_name = match self.get_header_name_index(sym_tab.section_index()) {
+                Some(s) => s,
+                None => {
+                    continue;
+                }
+            };
+
+            if name == sym_tab_name {
+                return Some(&sym_tab);
+            }
+        }
+
+        None
+    }
+
+    pub fn data_section_by_name(&self, name: &str) -> Option<&DataSection> {
+        for data_section in self.data_sections.iter() {
+            let data_section_name = match self.get_header_name_index(data_section.section_index()) {
+                Some(s) => s,
+                None => {
+                    continue;
+                }
+            };
+
+            if name == data_section_name {
+                return Some(&data_section);
+            }
+        }
+
+        None
+    }
+
+    pub fn rel_section_by_name(&self, name: &str) -> Option<&RelSection> {
+        for rel_section in self.rel_sections.iter() {
+            let rel_section_name = match self.get_header_name_index(rel_section.section_index()) {
+                Some(s) => s,
+                None => {
+                    continue;
+                }
+            };
+
+            if name == rel_section_name {
+                return Some(&rel_section);
+            }
+        }
+
+        None
     }
 
     pub fn section_headers(&self) -> Iter<SectionHeader> {
