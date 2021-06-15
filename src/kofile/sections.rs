@@ -54,7 +54,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -163,6 +163,33 @@ impl SymbolTable {
         self.symbols.get(index)
     }
 
+    pub fn find_has_name(&self, name_idx: usize) -> Option<&KOSymbol> {
+        for symbol in self.symbols() {
+            if symbol.name_idx() == name_idx {
+                return Some(symbol);
+            }
+        }
+
+        None
+    }
+
+    pub fn find(&self, symbol: &KOSymbol) -> Option<usize> {
+        for (index, contained_symbol) in self.symbols().enumerate() {
+            if symbol == contained_symbol {
+                return Some(index);
+            }
+        }
+
+        None
+    }
+
+    pub fn add_checked(&mut self, symbol: KOSymbol) -> usize {
+        match self.find(&symbol) {
+            Some(index) => index,
+            None => self.add(symbol),
+        }
+    }
+
     pub fn add(&mut self, symbol: KOSymbol) -> usize {
         self.size += KOSymbol::size_bytes() as usize;
         self.symbols.push(symbol);
@@ -247,6 +274,41 @@ impl StringTable {
         Some(&self.contents[index..end])
     }
 
+    pub fn find(&self, s: &str) -> Option<usize> {
+        if s == "" {
+            return Some(0);
+        }
+
+        let mut index = 1;
+        let mut end = index;
+        let mut contents_iter = self.contents.chars();
+
+        while contents_iter.next().is_some() {
+            loop {
+                if let Some(c) = contents_iter.next() {
+                    if c == '\0' {
+                        break;
+                    }
+
+                    end += c.len_utf8();
+                } else {
+                    break;
+                }
+            }
+
+            let next = &self.contents[index..end];
+
+            if next == s {
+                return Some(index);
+            }
+
+            index += end - index + 1;
+            end = index;
+        }
+
+        None
+    }
+
     pub fn strings(&self) -> Vec<&str> {
         let mut strs = Vec::new();
         let mut index = 1;
@@ -275,6 +337,13 @@ impl StringTable {
         strs
     }
 
+    pub fn add_checked(&mut self, new_str: &str) -> usize {
+        match self.find(new_str) {
+            Some(index) => index,
+            None => self.add(new_str),
+        }
+    }
+
     pub fn add(&mut self, new_str: &str) -> usize {
         let index = self.contents.len();
 
@@ -294,7 +363,7 @@ impl StringTable {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
+        _debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -332,6 +401,23 @@ impl DataSection {
             data: Vec::with_capacity(amount),
             size: 0,
             section_index,
+        }
+    }
+
+    pub fn find(&self, value: &KOSValue) -> Option<usize> {
+        for (index, contained_value) in self.data().enumerate() {
+            if value == contained_value {
+                return Some(index);
+            }
+        }
+
+        None
+    }
+
+    pub fn add_checked(&mut self, value: KOSValue) -> usize {
+        match self.find(&value) {
+            Some(index) => index,
+            None => self.add(value),
         }
     }
 

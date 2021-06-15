@@ -99,4 +99,12 @@ impl Instr {
             _ => unreachable!(),
         })
     }
+
+    pub fn opcode(&self) -> Opcode {
+        match self {
+            Self::ZeroOp(opcode) => *opcode,
+            Self::OneOp(opcode, _) => *opcode,
+            Self::TwoOp(opcode, _, _) => *opcode,
+        }
+    }
 }

@@ -19,6 +19,14 @@ impl Instr {
             Self::TwoOp(_, _, _) => 9,
         }
     }
+
+    pub fn opcode(&self) -> Opcode {
+        match self {
+            Self::ZeroOp(opcode) => *opcode,
+            Self::OneOp(opcode, _) => *opcode,
+            Self::TwoOp(opcode, _, _) => *opcode,
+        }
+    }
 }
 
 impl ToBytes for Instr {
