@@ -13,6 +13,7 @@ use crate::FromBytes;
 
 use crate::errors::{ReadError, ReadResult};
 
+use self::sections::SectionKind;
 use self::{
     errors::{UpdateError, UpdateResult},
     sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
@@ -113,6 +114,32 @@ impl KOFile {
 
     pub fn rel_sections(&self) -> Iter<RelSection> {
         self.rel_sections.iter()
+    }
+
+    pub fn new_sh(&mut self, name: &str, kind: SectionKind) -> usize {
+        let name_idx = self.add_shstr(name);
+        let header = SectionHeader::new(name_idx, kind);
+        self.add_header(header)
+    }
+
+    pub fn new_strtab(&mut self, name: &str) -> StringTable {
+        let sh_index = self.new_sh(name, SectionKind::StrTab);
+        StringTable::new(4, sh_index)
+    }
+
+    pub fn new_symtab(&mut self, name: &str) -> SymbolTable {
+        let sh_index = self.new_sh(name, SectionKind::SymTab);
+        SymbolTable::new(4, sh_index)
+    }
+
+    pub fn new_datasection(&mut self, name: &str) -> DataSection {
+        let sh_index = self.new_sh(name, SectionKind::Data);
+        DataSection::new(4, sh_index)
+    }
+
+    pub fn new_relsection(&mut self, name: &str) -> RelSection {
+        let sh_index = self.new_sh(name, SectionKind::Rel);
+        RelSection::new(4, sh_index)
     }
 
     pub fn str_tab_by_name(&self, name: &str) -> Option<&StringTable> {
