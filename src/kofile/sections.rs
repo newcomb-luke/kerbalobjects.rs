@@ -323,8 +323,6 @@ impl StringTable {
                     }
 
                     end += c.len_utf8();
-
-                    println!("{}", &self.contents[index..end]);
                 } else {
                     break;
                 }
