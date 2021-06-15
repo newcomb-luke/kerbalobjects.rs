@@ -323,6 +323,8 @@ impl StringTable {
                     }
 
                     end += c.len_utf8();
+
+                    println!("{}", &self.contents[index..end]);
                 } else {
                     break;
                 }
@@ -331,7 +333,7 @@ impl StringTable {
             strs.push(&self.contents[index..end]);
 
             index += end - index + 1;
-            end = index;
+            end = index + 1;
         }
 
         strs
@@ -591,6 +593,21 @@ mod tests {
 
         assert_eq!(index, 7);
         assert_eq!(strtab.get(index).unwrap(), "world");
+    }
+
+    #[test]
+    fn strtab_strings() {
+        let mut strtab = StringTable::new(16, 0);
+
+        strtab.add("Hello");
+        strtab.add("rust");
+        strtab.add("world");
+
+        let strs = strtab.strings();
+
+        assert_eq!(strs[0], "Hello");
+        assert_eq!(strs[1], "rust");
+        assert_eq!(strs[2], "world");
     }
 
     #[test]
