@@ -142,8 +142,9 @@ impl KOFile {
         RelSection::new(4, sh_index)
     }
 
-    pub fn str_tab_by_name(&self, name: &str) -> Option<&StringTable> {
-        for str_tab in self.str_tabs.iter() {
+    pub fn str_tab_by_name(&mut self, name: &str) -> Option<&mut StringTable> {
+        let mut index_opt = None;
+        for (curr_index, str_tab) in self.str_tabs.iter().enumerate() {
             let str_tab_name = match self.get_header_name_index(str_tab.section_index()) {
                 Some(s) => s,
                 None => {
@@ -152,15 +153,17 @@ impl KOFile {
             };
 
             if name == str_tab_name {
-                return Some(&str_tab);
+                index_opt = Some(curr_index);
+                break;
             }
         }
 
-        None
+        self.str_tabs.iter_mut().nth(index_opt?)
     }
 
-    pub fn sym_tab_by_name(&self, name: &str) -> Option<&SymbolTable> {
-        for sym_tab in self.sym_tabs.iter() {
+    pub fn sym_tab_by_name(&mut self, name: &str) -> Option<&mut SymbolTable> {
+        let mut index_opt = None;
+        for (curr_index, sym_tab) in self.sym_tabs.iter().enumerate() {
             let sym_tab_name = match self.get_header_name_index(sym_tab.section_index()) {
                 Some(s) => s,
                 None => {
@@ -169,15 +172,17 @@ impl KOFile {
             };
 
             if name == sym_tab_name {
-                return Some(&sym_tab);
+                index_opt = Some(curr_index);
+                break;
             }
         }
 
-        None
+        self.sym_tabs.iter_mut().nth(index_opt?)
     }
 
-    pub fn data_section_by_name(&self, name: &str) -> Option<&DataSection> {
-        for data_section in self.data_sections.iter() {
+    pub fn data_section_by_name(&mut self, name: &str) -> Option<&mut DataSection> {
+        let mut index_opt = None;
+        for (curr_index, data_section) in self.data_sections.iter().enumerate() {
             let data_section_name = match self.get_header_name_index(data_section.section_index()) {
                 Some(s) => s,
                 None => {
@@ -186,15 +191,17 @@ impl KOFile {
             };
 
             if name == data_section_name {
-                return Some(&data_section);
+                index_opt = Some(curr_index);
+                break;
             }
         }
 
-        None
+        self.data_sections.iter_mut().nth(index_opt?)
     }
 
-    pub fn rel_section_by_name(&self, name: &str) -> Option<&RelSection> {
-        for rel_section in self.rel_sections.iter() {
+    pub fn rel_section_by_name(&mut self, name: &str) -> Option<&mut RelSection> {
+        let mut index_opt = None;
+        for (curr_index, rel_section) in self.rel_sections.iter().enumerate() {
             let rel_section_name = match self.get_header_name_index(rel_section.section_index()) {
                 Some(s) => s,
                 None => {
@@ -203,11 +210,12 @@ impl KOFile {
             };
 
             if name == rel_section_name {
-                return Some(&rel_section);
+                index_opt = Some(curr_index);
+                break;
             }
         }
 
-        None
+        self.rel_sections.iter_mut().nth(index_opt?)
     }
 
     pub fn section_headers(&self) -> Iter<SectionHeader> {
