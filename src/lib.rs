@@ -1,3 +1,5 @@
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::iter::Peekable;
 use std::slice::Iter;
 
@@ -46,6 +48,61 @@ impl KOSValue {
             Self::Double(_) | Self::ScalarDouble(_) => 9,
             Self::String(s) | Self::StringValue(s) => {
                 2 + s.len() // 1 byte for the type, 1 byte for the length, and then the string
+            }
+        }
+    }
+}
+
+impl Hash for KOSValue {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Null => 0.hash(state),
+            Self::Bool(b) => {
+                1.hash(state);
+                b.hash(state);
+            }
+            Self::Byte(b) => {
+                2.hash(state);
+                b.hash(state);
+            }
+            Self::Int16(i) => {
+                3.hash(state);
+                i.hash(state);
+            }
+            Self::Int32(i) => {
+                4.hash(state);
+                i.hash(state);
+            }
+            Self::Float(f) => {
+                5.hash(state);
+                f.to_bits().hash(state);
+            }
+            Self::Double(d) => {
+                6.hash(state);
+                d.to_bits().hash(state);
+            }
+            Self::String(s) => {
+                7.hash(state);
+                s.hash(state);
+            }
+            Self::ArgMarker => {
+                8.hash(state);
+            }
+            Self::ScalarInt(i) => {
+                9.hash(state);
+                i.hash(state);
+            }
+            Self::ScalarDouble(d) => {
+                10.hash(state);
+                d.to_bits().hash(state);
+            }
+            Self::BoolValue(b) => {
+                11.hash(state);
+                b.hash(state);
+            }
+            Self::StringValue(s) => {
+                12.hash(state);
+                s.hash(state);
             }
         }
     }
