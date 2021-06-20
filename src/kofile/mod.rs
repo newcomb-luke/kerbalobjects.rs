@@ -13,7 +13,7 @@ use crate::FromBytes;
 
 use crate::errors::{ReadError, ReadResult};
 
-use self::sections::SectionKind;
+use self::sections::{SectionIndex, SectionKind};
 use self::{
     errors::{UpdateError, UpdateResult},
     sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
@@ -142,80 +142,123 @@ impl KOFile {
         RelSection::new(4, sh_index)
     }
 
-    pub fn str_tab_by_name(&mut self, name: &str) -> Option<&mut StringTable> {
-        let mut index_opt = None;
-        for (curr_index, str_tab) in self.str_tabs.iter().enumerate() {
-            let str_tab_name = match self.get_header_name_index(str_tab.section_index()) {
-                Some(s) => s,
+    pub fn sh_index_by_name(&self, name: &str) -> Option<usize> {
+        for (index, header) in self.section_headers.iter().enumerate() {
+            let name_idx = header.name_idx();
+            let sh_name = match self.sh_strtab.get(name_idx) {
+                Some(name) => name,
                 None => {
                     continue;
                 }
             };
 
-            if name == str_tab_name {
-                index_opt = Some(curr_index);
-                break;
+            if name == sh_name {
+                return Some(index);
             }
         }
 
-        self.str_tabs.iter_mut().nth(index_opt?)
+        None
     }
 
-    pub fn sym_tab_by_name(&mut self, name: &str) -> Option<&mut SymbolTable> {
-        let mut index_opt = None;
-        for (curr_index, sym_tab) in self.sym_tabs.iter().enumerate() {
-            let sym_tab_name = match self.get_header_name_index(sym_tab.section_index()) {
+    fn iter_index_by_name(&self, name: &str, iter: Iter<&dyn SectionIndex>) -> Option<usize> {
+        for (index, section) in iter.enumerate() {
+            let section_name = match self.get_header_name_index(section.section_index()) {
                 Some(s) => s,
                 None => {
                     continue;
                 }
             };
 
-            if name == sym_tab_name {
-                index_opt = Some(curr_index);
-                break;
+            if section_name == name {
+                return Some(index);
             }
         }
 
-        self.sym_tabs.iter_mut().nth(index_opt?)
+        None
     }
 
-    pub fn data_section_by_name(&mut self, name: &str) -> Option<&mut DataSection> {
-        let mut index_opt = None;
-        for (curr_index, data_section) in self.data_sections.iter().enumerate() {
-            let data_section_name = match self.get_header_name_index(data_section.section_index()) {
-                Some(s) => s,
-                None => {
-                    continue;
-                }
-            };
-
-            if name == data_section_name {
-                index_opt = Some(curr_index);
-                break;
-            }
-        }
-
-        self.data_sections.iter_mut().nth(index_opt?)
+    fn str_tab_index_by_name(&self, name: &str) -> Option<usize> {
+        self.iter_index_by_name(
+            name,
+            self.str_tabs
+                .iter()
+                .map(|s| s as &dyn SectionIndex)
+                .collect::<Vec<&dyn SectionIndex>>()
+                .iter(),
+        )
     }
 
-    pub fn rel_section_by_name(&mut self, name: &str) -> Option<&mut RelSection> {
-        let mut index_opt = None;
-        for (curr_index, rel_section) in self.rel_sections.iter().enumerate() {
-            let rel_section_name = match self.get_header_name_index(rel_section.section_index()) {
-                Some(s) => s,
-                None => {
-                    continue;
-                }
-            };
+    fn sym_tab_index_by_name(&self, name: &str) -> Option<usize> {
+        self.iter_index_by_name(
+            name,
+            self.sym_tabs
+                .iter()
+                .map(|s| s as &dyn SectionIndex)
+                .collect::<Vec<&dyn SectionIndex>>()
+                .iter(),
+        )
+    }
 
-            if name == rel_section_name {
-                index_opt = Some(curr_index);
-                break;
-            }
-        }
+    fn data_section_index_by_name(&self, name: &str) -> Option<usize> {
+        self.iter_index_by_name(
+            name,
+            self.data_sections
+                .iter()
+                .map(|s| s as &dyn SectionIndex)
+                .collect::<Vec<&dyn SectionIndex>>()
+                .iter(),
+        )
+    }
 
-        self.rel_sections.iter_mut().nth(index_opt?)
+    fn rel_section_index_by_name(&self, name: &str) -> Option<usize> {
+        self.iter_index_by_name(
+            name,
+            self.rel_sections
+                .iter()
+                .map(|s| s as &dyn SectionIndex)
+                .collect::<Vec<&dyn SectionIndex>>()
+                .iter(),
+        )
+    }
+
+    pub fn str_tab_by_name(&self, name: &str) -> Option<&StringTable> {
+        self.str_tabs.iter().nth(self.str_tab_index_by_name(name)?)
+    }
+
+    pub fn str_tab_by_name_mut(&mut self, name: &str) -> Option<&mut StringTable> {
+        let index = self.str_tab_index_by_name(name)?;
+        self.str_tabs.iter_mut().nth(index)
+    }
+
+    pub fn sym_tab_by_name(&self, name: &str) -> Option<&SymbolTable> {
+        self.sym_tabs.iter().nth(self.sym_tab_index_by_name(name)?)
+    }
+
+    pub fn sym_tab_by_name_mut(&mut self, name: &str) -> Option<&mut SymbolTable> {
+        let index = self.sym_tab_index_by_name(name)?;
+        self.sym_tabs.iter_mut().nth(index)
+    }
+
+    pub fn data_section_by_name(&self, name: &str) -> Option<&DataSection> {
+        self.data_sections
+            .iter()
+            .nth(self.data_section_index_by_name(name)?)
+    }
+
+    pub fn data_section_by_name_mut(&mut self, name: &str) -> Option<&mut DataSection> {
+        let index = self.data_section_index_by_name(name)?;
+        self.data_sections.iter_mut().nth(index)
+    }
+
+    pub fn rel_section_by_name(&self, name: &str) -> Option<&RelSection> {
+        self.rel_sections
+            .iter()
+            .nth(self.rel_section_index_by_name(name)?)
+    }
+
+    pub fn rel_section_by_name_mut(&mut self, name: &str) -> Option<&mut RelSection> {
+        let index = self.rel_section_index_by_name(name)?;
+        self.rel_sections.iter_mut().nth(index)
     }
 
     pub fn section_headers(&self) -> Iter<SectionHeader> {

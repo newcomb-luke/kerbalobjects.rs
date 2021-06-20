@@ -8,6 +8,10 @@ use crate::errors::{ReadError, ReadResult};
 use super::{instructions::Instr, symbols::KOSymbol};
 use std::mem;
 
+pub trait SectionIndex {
+    fn section_index(&self) -> usize;
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SectionKind {
     Null,
@@ -150,6 +154,12 @@ pub struct SymbolTable {
     section_index: usize,
 }
 
+impl SectionIndex for SymbolTable {
+    fn section_index(&self) -> usize {
+        self.section_index
+    }
+}
+
 impl SymbolTable {
     pub fn new(amount: usize, section_index: usize) -> Self {
         SymbolTable {
@@ -204,10 +214,6 @@ impl SymbolTable {
         self.symbols.iter()
     }
 
-    pub fn section_index(&self) -> usize {
-        self.section_index
-    }
-
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         debug: bool,
@@ -241,6 +247,12 @@ impl ToBytes for SymbolTable {
 pub struct StringTable {
     contents: String,
     section_index: usize,
+}
+
+impl SectionIndex for StringTable {
+    fn section_index(&self) -> usize {
+        self.section_index
+    }
 }
 
 impl StringTable {
@@ -357,10 +369,6 @@ impl StringTable {
         self.contents.len() as u32
     }
 
-    pub fn section_index(&self) -> usize {
-        self.section_index
-    }
-
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         _debug: bool,
@@ -393,6 +401,12 @@ pub struct DataSection {
     data: Vec<KOSValue>,
     size: usize,
     section_index: usize,
+}
+
+impl SectionIndex for DataSection {
+    fn section_index(&self) -> usize {
+        self.section_index
+    }
 }
 
 impl DataSection {
@@ -442,10 +456,6 @@ impl DataSection {
         self.size as u32
     }
 
-    pub fn section_index(&self) -> usize {
-        self.section_index
-    }
-
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         debug: bool,
@@ -484,6 +494,12 @@ pub struct RelSection {
     section_index: usize,
 }
 
+impl SectionIndex for RelSection {
+    fn section_index(&self) -> usize {
+        self.section_index
+    }
+}
+
 impl RelSection {
     pub fn new(amount: usize, section_index: usize) -> Self {
         RelSection {
@@ -512,10 +528,6 @@ impl RelSection {
 
     pub fn instructions(&self) -> Iter<Instr> {
         self.instructions.iter()
-    }
-
-    pub fn section_index(&self) -> usize {
-        self.section_index
     }
 
     pub fn from_bytes(
