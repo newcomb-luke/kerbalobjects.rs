@@ -113,7 +113,7 @@ impl FromBytes for SymType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KOSymbol {
     name_idx: usize,
     value_idx: usize,
@@ -210,6 +210,79 @@ impl FromBytes for KOSymbol {
             sym_bind,
             sym_type,
             sh_idx,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReldEntry {
+    section_index: usize,
+    instr_index: usize,
+    operand_index: usize,
+    symbol_index: usize,
+}
+
+impl ReldEntry {
+    pub fn new(
+        section_index: usize,
+        instr_index: usize,
+        operand_index: usize,
+        symbol_index: usize,
+    ) -> Self {
+        ReldEntry {
+            section_index,
+            instr_index,
+            operand_index,
+            symbol_index,
+        }
+    }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn instr_index(&self) -> usize {
+        self.instr_index
+    }
+
+    pub fn operand_index(&self) -> usize {
+        self.operand_index
+    }
+
+    pub fn symbol_index(&self) -> usize {
+        self.symbol_index
+    }
+
+    pub fn size_bytes(&self) -> u32 {
+        4 * 4
+    }
+}
+
+impl ToBytes for ReldEntry {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        (self.section_index as u32).to_bytes(buf);
+        (self.instr_index as u32).to_bytes(buf);
+        (self.operand_index as u32).to_bytes(buf);
+        (self.symbol_index as u32).to_bytes(buf);
+    }
+}
+
+impl FromBytes for ReldEntry {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+        let section_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let instr_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let operand_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let symbol_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+
+        Ok(ReldEntry {
+            section_index,
+            instr_index,
+            operand_index,
+            symbol_index,
         })
     }
 }
