@@ -1,7 +1,11 @@
 use std::io::{Read, Write};
 
 use kerbalobjects::{
-    kofile::{instructions::Instr, KOFile},
+    kofile::{
+        instructions::Instr,
+        symbols::{KOSymbol, ReldEntry},
+        KOFile,
+    },
     FromBytes, KOSValue, Opcode, ToBytes,
 };
 
@@ -15,6 +19,9 @@ fn write_kofile() {
     let mut ko = KOFile::new();
 
     let mut data_section = ko.new_datasection(".data");
+    let mut symtab = ko.new_symtab(".symtab");
+    let mut symstrtab = ko.new_strtab(".symstrtab");
+    let mut reld_section = ko.new_reldsection(".reld");
     let mut start = ko.new_funcsection("_start");
 
     let print_value = KOSValue::String(String::from("print()"));
@@ -27,7 +34,25 @@ fn write_kofile() {
     let two_value_index = data_section.add(two_value);
 
     let marker_value = KOSValue::ArgMarker;
+    let marker_value_size = marker_value.size_bytes();
     let marker_value_index = data_section.add(marker_value);
+
+    let marker_symbol_name_idx = symstrtab.add("marker");
+
+    let marker_symbol = KOSymbol::new(
+        marker_symbol_name_idx,
+        marker_value_index,
+        marker_value_size as u16,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::NoType,
+        2,
+    );
+
+    let marker_symbol_index = symtab.add(marker_symbol);
+
+    let reld_entry = ReldEntry::new(3, 0, 0, marker_symbol_index);
+
+    reld_section.add(reld_entry);
 
     let push_two_instr = Instr::OneOp(Opcode::Push, two_value_index);
     let add_instr = Instr::ZeroOp(Opcode::Add);
@@ -42,6 +67,9 @@ fn write_kofile() {
 
     ko.add_data_section(data_section);
     ko.add_func_section(start);
+    ko.add_str_tab(symstrtab);
+    ko.add_sym_tab(symtab);
+    ko.add_reld_section(reld_section);
 
     let mut file_buffer = Vec::with_capacity(2048);
 

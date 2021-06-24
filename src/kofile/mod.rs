@@ -382,6 +382,13 @@ impl ToBytes for KOFile {
                         continue;
                     }
                 }
+
+                for reld_section in self.reld_sections.iter() {
+                    if reld_section.section_index() == i {
+                        reld_section.to_bytes(&mut section_buffer);
+                        continue;
+                    }
+                }
             }
         }
 

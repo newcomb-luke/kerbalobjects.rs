@@ -125,6 +125,7 @@ pub struct KOSymbol {
 
 impl KOSymbol {
     pub fn new(
+        name_idx: usize,
         value_idx: usize,
         size: u16,
         sym_bind: SymBind,
@@ -132,17 +133,13 @@ impl KOSymbol {
         sh_idx: u16,
     ) -> Self {
         KOSymbol {
-            name_idx: 0,
+            name_idx,
             value_idx,
             size,
             sym_bind,
             sym_type,
             sh_idx,
         }
-    }
-
-    pub fn set_name_idx(&mut self, name_idx: usize) {
-        self.name_idx = name_idx;
     }
 
     pub fn name_idx(&self) -> usize {
@@ -262,7 +259,7 @@ impl ToBytes for ReldEntry {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         (self.section_index as u32).to_bytes(buf);
         (self.instr_index as u32).to_bytes(buf);
-        (self.operand_index as u32).to_bytes(buf);
+        (self.operand_index as u8).to_bytes(buf);
         (self.symbol_index as u32).to_bytes(buf);
     }
 }
@@ -274,7 +271,7 @@ impl FromBytes for ReldEntry {
         let instr_index =
             u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
         let operand_index =
-            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+            u8::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
         let symbol_index =
             u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
 

@@ -606,9 +606,18 @@ impl SectionFromBytes for ReldSection {
         let mut read = 0;
         let mut entries = Vec::new();
 
+        if debug {
+            println!("Reld section:");
+        }
+
         while read < size {
             let entry = ReldEntry::from_bytes(source, debug)?;
             read += entry.size_bytes() as usize;
+
+            if debug {
+                println!("\t{:?}", entry);
+            }
+
             entries.push(entry);
         }
 
@@ -684,10 +693,9 @@ mod tests {
         let mut strtab = StringTable::new(8, 0);
         let mut symtab = SymbolTable::new(1, 0);
 
-        let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::Func, 3);
-
         let s_index = strtab.add("fn_add");
-        sym.set_name_idx(s_index);
+
+        let sym = KOSymbol::new(s_index, 0, 0, SymBind::Local, SymType::Func, 3);
 
         let sym_index = symtab.add(sym);
 
@@ -699,10 +707,9 @@ mod tests {
         let mut strtab = StringTable::new(8, 0);
         let mut symtab = SymbolTable::new(1, 0);
 
-        let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::Func, 3);
-
         let s_index = strtab.add("fn_add");
-        sym.set_name_idx(s_index);
+
+        let sym = KOSymbol::new(s_index, 0, 0, SymBind::Local, SymType::Func, 3);
 
         let sym_index = symtab.add(sym);
 
