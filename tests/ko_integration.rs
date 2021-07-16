@@ -19,10 +19,10 @@ fn write_kofile() {
     let mut ko = KOFile::new();
 
     let mut data_section = ko.new_datasection(".data");
+    let mut start = ko.new_funcsection("_start");
     let mut symtab = ko.new_symtab(".symtab");
     let mut symstrtab = ko.new_strtab(".symstrtab");
     let mut reld_section = ko.new_reldsection(".reld");
-    let mut start = ko.new_funcsection("_start");
 
     let print_value = KOSValue::String(String::from("print()"));
     let print_value_index = data_section.add(print_value);
@@ -47,7 +47,6 @@ fn write_kofile() {
         kerbalobjects::kofile::symbols::SymType::NoType,
         2,
     );
-
     let marker_symbol_index = symtab.add(marker_symbol);
 
     let reld_entry = ReldEntry::new(3, 0, 0, marker_symbol_index);
@@ -56,7 +55,7 @@ fn write_kofile() {
 
     let push_two_instr = Instr::OneOp(Opcode::Push, two_value_index);
     let add_instr = Instr::ZeroOp(Opcode::Add);
-    let push_marker = Instr::OneOp(Opcode::Push, marker_value_index);
+    let push_marker = Instr::OneOp(Opcode::Push, marker_symbol_index);
     let call_print = Instr::TwoOp(Opcode::Call, empty_value_index, print_value_index);
 
     start.add(push_marker);
@@ -64,6 +63,29 @@ fn write_kofile() {
     start.add(push_two_instr);
     start.add(add_instr);
     start.add(call_print);
+
+    let start_symbol_name_idx = symstrtab.add("_start");
+    let start_symbol = KOSymbol::new(
+        start_symbol_name_idx,
+        0,
+        start.size() as u16,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::Func,
+        3,
+    );
+
+    let file_symbol_name_idx = symstrtab.add("test.ko");
+    let file_symbol = KOSymbol::new(
+        file_symbol_name_idx,
+        0,
+        0,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::File,
+        0,
+    );
+
+    symtab.add(file_symbol);
+    symtab.add(start_symbol);
 
     ko.add_data_section(data_section);
     ko.add_func_section(start);

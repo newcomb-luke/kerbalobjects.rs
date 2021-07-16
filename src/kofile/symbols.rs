@@ -146,24 +146,48 @@ impl KOSymbol {
         self.name_idx
     }
 
+    pub fn set_name_idx(&mut self, name_idx: usize) {
+        self.name_idx = name_idx;
+    }
+
     pub fn value_idx(&self) -> usize {
         self.value_idx
+    }
+
+    pub fn set_value_idx(&mut self, value_idx: usize) {
+        self.value_idx = value_idx;
     }
 
     pub fn size(&self) -> u16 {
         self.size
     }
 
+    pub fn set_size(&mut self, size: u16) {
+        self.size = size;
+    }
+
     pub fn sym_bind(&self) -> SymBind {
         self.sym_bind
+    }
+
+    pub fn set_sym_bind(&mut self, sym_bind: SymBind) {
+        self.sym_bind = sym_bind;
     }
 
     pub fn sym_type(&self) -> SymType {
         self.sym_type
     }
 
+    pub fn set_sym_type(&mut self, sym_type: SymType) {
+        self.sym_type = sym_type;
+    }
+
     pub fn sh_idx(&self) -> u16 {
         self.sh_idx
+    }
+
+    pub fn set_sh_idx(&mut self, sh_idx: u16) {
+        self.sh_idx = sh_idx;
     }
 
     pub fn size_bytes() -> u32 {
