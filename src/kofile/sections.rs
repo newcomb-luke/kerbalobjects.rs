@@ -154,6 +154,7 @@ impl FromBytes for SectionHeader {
     }
 }
 
+#[derive(Debug)]
 pub struct SymbolTable {
     symbols: Vec<KOSymbol>,
     size: usize,
@@ -233,6 +234,7 @@ impl ToBytes for SymbolTable {
     }
 }
 
+#[derive(Debug)]
 pub struct StringTable {
     hashes: Vec<u64>,
     contents: Vec<String>,
@@ -359,6 +361,7 @@ impl ToBytes for StringTable {
     }
 }
 
+#[derive(Debug)]
 pub struct DataSection {
     hashes: Vec<u64>,
     data: Vec<KOSValue>,
@@ -472,6 +475,7 @@ impl ToBytes for DataSection {
     }
 }
 
+#[derive(Debug)]
 pub struct FuncSection {
     instructions: Vec<Instr>,
     size: usize,
@@ -548,6 +552,7 @@ impl ToBytes for FuncSection {
     }
 }
 
+#[derive(Debug)]
 pub struct ReldSection {
     entries: Vec<ReldEntry>,
     size: u32,
