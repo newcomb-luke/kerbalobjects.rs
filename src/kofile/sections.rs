@@ -268,7 +268,7 @@ impl StringTable {
         hasher.write(s.as_bytes());
         let hash = hasher.finish();
 
-        self.hashes.iter().position(|item| **item == *hash)
+        self.hashes.iter().position(|item| *item == hash)
     }
 
     pub fn strings(&self) -> Iter<String> {
@@ -387,7 +387,7 @@ impl DataSection {
         value.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.hashes.iter().position(|item| **item == *hash)
+        self.hashes.iter().position(|item| *item == hash)
     }
 
     pub fn add_checked(&mut self, value: KOSValue) -> usize {
