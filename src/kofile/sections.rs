@@ -311,7 +311,6 @@ impl SectionFromBytes for StringTable {
         let mut contents = Vec::new();
         let mut hashes = Vec::new();
         let mut read = 0;
-        let mut hasher = DefaultHasher::new();
 
         while read < size {
             let mut b = Vec::new();
@@ -328,6 +327,8 @@ impl SectionFromBytes for StringTable {
             }
 
             let s = String::from_utf8(b).map_err(|_| ReadError::StringTableReadError)?;
+
+            let mut hasher = DefaultHasher::new();
             s.hash(&mut hasher);
             let hash = hasher.finish();
 
@@ -437,12 +438,11 @@ impl SectionFromBytes for DataSection {
         let mut data = Vec::new();
         let mut hashes = Vec::new();
 
-        let mut hasher = DefaultHasher::new();
-
         while read < size {
             let kos_value = KOSValue::from_bytes(source, debug)?;
             read += kos_value.size_bytes();
 
+            let mut hasher = DefaultHasher::new();
             kos_value.hash(&mut hasher);
             let hash = hasher.finish();
 
