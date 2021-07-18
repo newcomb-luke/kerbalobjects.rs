@@ -329,7 +329,7 @@ impl SectionFromBytes for StringTable {
             let s = String::from_utf8(b).map_err(|_| ReadError::StringTableReadError)?;
 
             let mut hasher = DefaultHasher::new();
-            s.hash(&mut hasher);
+            hasher.write(s.as_bytes());
             let hash = hasher.finish();
 
             hashes.push(hash);
