@@ -18,7 +18,7 @@
 ## Preface
 This document is intended to provide anyone with an interest in how KSM files are structured with a thorough explanation of exactly how and why each component of the file is there. A document like this one exists currently within the kOS GitHub repository, however it is outdated and does not explain specific key details. The [kOS document](https://github.com/KSP-KOS/KOS/blob/develop/src/kOS.Safe/Compilation/CompiledObject-doc.md) also is meant for developers of kOS who are already familiar with the internal code that handles KSM, while this and accompanying documents are designed to be able to be used by someone who is not very familiar with how kOS works internally at all.
 
-There has been in interest for several years to create a new programming language for kOS, and many would benefit from being a compiled language rather than a transpiled one. This document seeks to be able to provide developers with a strong starting point to be able to begin that undertaking of their own.
+There has been an interest for several years to create a new programming language for kOS, and many would benefit from being a compiled language rather than a transpiled one. This document seeks to be able to provide developers with a strong starting point to be able to begin that undertaking of their own.
 
 If any parts of this document are outdated or incorrect, please notify us by creating a GitHub issue.
 
@@ -168,7 +168,7 @@ Note that the operand, if multiple bytes, is in little-endian format.
 
 Now for the value of the operand. The value of any instruction's operand does not represent the value that will be used, it represents a *byte index into the file's Argument Section of the value*. A key thing to note is that the Argument Section's header **is included** in the index. To be clear, that means that because the Argument Section's header is 3 bytes long (%A then number), the first index an argument can have is 3, and that refers to the first argument in the section.
 
-Finally, if an instruction has more than one operand, they are simple added one after another. Currently as of writing this documentation, kOS only has up to 2 operands per instruction.
+Finally, if an instruction has more than one operand, they are simply added one after another. Currently as of writing this documentation, kOS only has up to 2 operands per instruction.
 
 An example of the Bscp instruction which takes two arguments is shown below using an index size of 1:
 
@@ -285,7 +285,7 @@ Wow! Reading through that, this program adds 2 + 2 and prints the result! Sounds
 
 At the end of that, the Debug Section is reached. %D is read, and the next byte after that is a 1, meaning that range indexes will only be 1 byte wide.
 
-In this case there is only one Debug Entry. The next two bytes are 0x01 and 0x00, which encodes the line number of 1. Then the next byte is 0x01, meaning that there is only 1 range. That range is 0x06 to 0x18, or indexes 6 to 24. If you do the math, you will find out that bytes 6 through 24 means all of the Code Sections, from the Argument Section to the Debug Section, or the entire code of the file. This encodes that all of the code in this file is from source line 1.
+In this case there is only one Debug Entry. The next two bytes are 0x01 and 0x00, which encodes the line number of 1. Then the next byte is 0x01, meaning that there is only 1 range. That range is 0x06 to 0x18, or indexes 6 to 24. If you do the math, you will find out that bytes 6 through 24 mean all of the Code Sections, from the Argument Section to the Debug Section, or the entire code of the file. This encodes that all of the code in this file is from source line 1.
 
 The KerboScript that this KSM File could have been created by compiling could be:
 
