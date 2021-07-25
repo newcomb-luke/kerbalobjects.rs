@@ -184,6 +184,12 @@ impl SymbolTable {
         self.symbols.iter().find(|sym| sym.name_idx() == name_idx)
     }
 
+    pub fn position_by_name(&self, name_idx: usize) -> Option<usize> {
+        self.symbols
+            .iter()
+            .position(|sym| sym.name_idx() == name_idx)
+    }
+
     pub fn find(&self, symbol: &KOSymbol) -> Option<usize> {
         self.symbols.iter().position(|sym| sym == symbol)
     }
