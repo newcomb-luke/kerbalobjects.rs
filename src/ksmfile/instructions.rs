@@ -16,18 +16,17 @@ impl Instr {
                 (operand as u8).to_bytes(buf);
             }
             2 => {
-                (operand as u16).to_bytes(buf);
+                buf.extend_from_slice(&(operand as u16).to_be_bytes());
             }
             3 => {
-                let converted = operand as u32;
-                let upper = (converted >> 16) as u8;
-                let lower = (converted & 0x0000ffff) as u16;
+                let slice = &(operand as u32).to_be_bytes();
 
-                upper.to_bytes(buf);
-                lower.to_bytes(buf);
+                for i in 1..4 {
+                    buf.push(slice[i]);
+                }
             }
             4 => {
-                (operand as u32).to_bytes(buf);
+                buf.extend_from_slice(&(operand as u32).to_be_bytes());
             }
             _ => unreachable!(),
         }
@@ -41,19 +40,40 @@ impl Instr {
         Ok(match num_index_bytes {
             1 => (u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError))? as usize,
             2 => {
-                (u16::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError))? as usize
+                let mut slice = [0u8; 2];
+                for i in 0..2 {
+                    if let Some(&byte) = source.next() {
+                        slice[i] = byte;
+                    } else {
+                        return Err(ReadError::OperandReadError);
+                    }
+                }
+                u16::from_be_bytes(slice) as usize
             }
             3 => {
-                let mut upper =
+                let first =
                     u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
-                upper = upper << 24;
-                let lower =
-                    u16::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
+                let second =
+                    u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
+                let third =
+                    u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
 
-                (upper | lower) as usize
+                let mut full = third;
+                full += second << 8;
+                full += first << 16;
+
+                (full) as usize
             }
             4 => {
-                (u32::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError))? as usize
+                let mut slice = [0u8; 4];
+                for i in 0..4 {
+                    if let Some(&byte) = source.next() {
+                        slice[i] = byte;
+                    } else {
+                        return Err(ReadError::OperandReadError);
+                    }
+                }
+                u32::from_be_bytes(slice) as usize
             }
             _ => unreachable!(),
         })
