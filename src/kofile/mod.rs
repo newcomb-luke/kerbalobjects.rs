@@ -13,18 +13,62 @@ use crate::FromBytes;
 
 use crate::errors::{ReadError, ReadResult};
 
-use self::sections::{SectionIndex, SectionKind};
+use self::sections::{ReldSection, SectionIndex, SectionKind};
 use self::{
     errors::{UpdateError, UpdateResult},
-    sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
+    sections::{DataSection, FuncSection, SectionHeader, StringTable, SymbolTable},
 };
 
 use super::ToBytes;
 
 pub use instructions::Instr;
 
-const FILE_VERSION: u8 = 3;
+const FILE_VERSION: u8 = 4;
 const MAGIC_NUMBER: u32 = 0x666f016b;
+
+pub trait SectionFromBytes {
+    fn from_bytes(
+        source: &mut Peekable<Iter<u8>>,
+        debug: bool,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self>
+    where
+        Self: Sized;
+}
+
+macro_rules! gen_get_by_name {
+    ($func_name: ident, $mut_func_name: ident, $section_name: ident, $section_type: ty) => {
+        pub fn $func_name(&self, name: &str) -> Option<&$section_type> {
+            self.$section_name.iter().find(|section| {
+                match self.sh_name_from_index(section.section_index()) {
+                    Some(s) => s == name,
+                    None => false,
+                }
+            })
+        }
+
+        pub fn $mut_func_name(&mut self, name: &str) -> Option<&mut $section_type> {
+            let mut index_opt = Some(0);
+
+            for (index, section) in self.$section_name.iter().enumerate() {
+                match self.sh_name_from_index(section.section_index()) {
+                    Some(s) => {
+                        if s == name {
+                            index_opt = Some(index);
+                            break;
+                        }
+                    }
+                    None => continue,
+                }
+            }
+
+            let index = index_opt?;
+
+            self.$section_name.iter_mut().nth(index)
+        }
+    };
+}
 
 pub struct KOFile {
     header: KOHeader,
@@ -33,7 +77,8 @@ pub struct KOFile {
     str_tabs: Vec<StringTable>,
     sym_tabs: Vec<SymbolTable>,
     data_sections: Vec<DataSection>,
-    rel_sections: Vec<RelSection>,
+    func_sections: Vec<FuncSection>,
+    reld_sections: Vec<ReldSection>,
 }
 
 impl KOFile {
@@ -45,7 +90,8 @@ impl KOFile {
             str_tabs: Vec::with_capacity(2),
             sym_tabs: Vec::with_capacity(1),
             data_sections: Vec::with_capacity(1),
-            rel_sections: Vec::with_capacity(1),
+            func_sections: Vec::with_capacity(1),
+            reld_sections: Vec::with_capacity(1),
         };
 
         kofile.add_header(SectionHeader::new(0, sections::SectionKind::Null));
@@ -61,7 +107,7 @@ impl KOFile {
         self.sh_strtab.add(name)
     }
 
-    pub fn get_shstr(&self, index: usize) -> Option<&str> {
+    pub fn get_shstr(&self, index: usize) -> Option<&String> {
         self.sh_strtab.get(index)
     }
 
@@ -75,11 +121,11 @@ impl KOFile {
         self.section_headers.get(index)
     }
 
-    pub fn get_header_name(&self, header: &SectionHeader) -> Option<&str> {
+    pub fn get_header_name(&self, header: &SectionHeader) -> Option<&String> {
         self.sh_strtab.get(header.name_idx())
     }
 
-    pub fn get_header_name_index(&self, index: usize) -> Option<&str> {
+    pub fn sh_name_from_index(&self, index: usize) -> Option<&String> {
         let header = self.section_headers.get(index)?;
         self.sh_strtab.get(header.name_idx())
     }
@@ -96,8 +142,12 @@ impl KOFile {
         self.data_sections.push(data_section);
     }
 
-    pub fn add_rel_section(&mut self, rel_section: RelSection) {
-        self.rel_sections.push(rel_section);
+    pub fn add_func_section(&mut self, func_section: FuncSection) {
+        self.func_sections.push(func_section);
+    }
+
+    pub fn add_reld_section(&mut self, reld_section: ReldSection) {
+        self.reld_sections.push(reld_section);
     }
 
     pub fn str_tabs(&self) -> Iter<StringTable> {
@@ -112,8 +162,12 @@ impl KOFile {
         self.data_sections.iter()
     }
 
-    pub fn rel_sections(&self) -> Iter<RelSection> {
-        self.rel_sections.iter()
+    pub fn func_sections(&self) -> Iter<FuncSection> {
+        self.func_sections.iter()
+    }
+
+    pub fn reld_sections(&self) -> Iter<ReldSection> {
+        self.reld_sections.iter()
     }
 
     pub fn new_sh(&mut self, name: &str, kind: SectionKind) -> usize {
@@ -137,9 +191,14 @@ impl KOFile {
         DataSection::new(4, sh_index)
     }
 
-    pub fn new_relsection(&mut self, name: &str) -> RelSection {
-        let sh_index = self.new_sh(name, SectionKind::Rel);
-        RelSection::new(4, sh_index)
+    pub fn new_funcsection(&mut self, name: &str) -> FuncSection {
+        let sh_index = self.new_sh(name, SectionKind::Func);
+        FuncSection::new(4, sh_index)
+    }
+
+    pub fn new_reldsection(&mut self, name: &str) -> ReldSection {
+        let sh_index = self.new_sh(name, SectionKind::Reld);
+        ReldSection::new(4, sh_index)
     }
 
     pub fn sh_index_by_name(&self, name: &str) -> Option<usize> {
@@ -160,106 +219,30 @@ impl KOFile {
         None
     }
 
-    fn iter_index_by_name(&self, name: &str, iter: Iter<&dyn SectionIndex>) -> Option<usize> {
-        for (index, section) in iter.enumerate() {
-            let section_name = match self.get_header_name_index(section.section_index()) {
-                Some(s) => s,
-                None => {
-                    continue;
-                }
-            };
+    gen_get_by_name!(str_tab_by_name, str_tab_by_name_mut, str_tabs, StringTable);
 
-            if section_name == name {
-                return Some(index);
-            }
-        }
+    gen_get_by_name!(sym_tab_by_name, sym_tab_by_name_mut, sym_tabs, SymbolTable);
 
-        None
-    }
+    gen_get_by_name!(
+        data_section_by_name,
+        data_section_by_name_mut,
+        data_sections,
+        DataSection
+    );
 
-    fn str_tab_index_by_name(&self, name: &str) -> Option<usize> {
-        self.iter_index_by_name(
-            name,
-            self.str_tabs
-                .iter()
-                .map(|s| s as &dyn SectionIndex)
-                .collect::<Vec<&dyn SectionIndex>>()
-                .iter(),
-        )
-    }
+    gen_get_by_name!(
+        func_section_by_name,
+        func_section_by_name_mut,
+        func_sections,
+        FuncSection
+    );
 
-    fn sym_tab_index_by_name(&self, name: &str) -> Option<usize> {
-        self.iter_index_by_name(
-            name,
-            self.sym_tabs
-                .iter()
-                .map(|s| s as &dyn SectionIndex)
-                .collect::<Vec<&dyn SectionIndex>>()
-                .iter(),
-        )
-    }
-
-    fn data_section_index_by_name(&self, name: &str) -> Option<usize> {
-        self.iter_index_by_name(
-            name,
-            self.data_sections
-                .iter()
-                .map(|s| s as &dyn SectionIndex)
-                .collect::<Vec<&dyn SectionIndex>>()
-                .iter(),
-        )
-    }
-
-    fn rel_section_index_by_name(&self, name: &str) -> Option<usize> {
-        self.iter_index_by_name(
-            name,
-            self.rel_sections
-                .iter()
-                .map(|s| s as &dyn SectionIndex)
-                .collect::<Vec<&dyn SectionIndex>>()
-                .iter(),
-        )
-    }
-
-    pub fn str_tab_by_name(&self, name: &str) -> Option<&StringTable> {
-        self.str_tabs.iter().nth(self.str_tab_index_by_name(name)?)
-    }
-
-    pub fn str_tab_by_name_mut(&mut self, name: &str) -> Option<&mut StringTable> {
-        let index = self.str_tab_index_by_name(name)?;
-        self.str_tabs.iter_mut().nth(index)
-    }
-
-    pub fn sym_tab_by_name(&self, name: &str) -> Option<&SymbolTable> {
-        self.sym_tabs.iter().nth(self.sym_tab_index_by_name(name)?)
-    }
-
-    pub fn sym_tab_by_name_mut(&mut self, name: &str) -> Option<&mut SymbolTable> {
-        let index = self.sym_tab_index_by_name(name)?;
-        self.sym_tabs.iter_mut().nth(index)
-    }
-
-    pub fn data_section_by_name(&self, name: &str) -> Option<&DataSection> {
-        self.data_sections
-            .iter()
-            .nth(self.data_section_index_by_name(name)?)
-    }
-
-    pub fn data_section_by_name_mut(&mut self, name: &str) -> Option<&mut DataSection> {
-        let index = self.data_section_index_by_name(name)?;
-        self.data_sections.iter_mut().nth(index)
-    }
-
-    pub fn rel_section_by_name(&self, name: &str) -> Option<&RelSection> {
-        self.rel_sections
-            .iter()
-            .nth(self.rel_section_index_by_name(name)?)
-    }
-
-    pub fn rel_section_by_name_mut(&mut self, name: &str) -> Option<&mut RelSection> {
-        let index = self.rel_section_index_by_name(name)?;
-        self.rel_sections.iter_mut().nth(index)
-    }
+    gen_get_by_name!(
+        reld_section_by_name,
+        reld_section_by_name_mut,
+        reld_sections,
+        ReldSection
+    );
 
     pub fn section_headers(&self) -> Iter<SectionHeader> {
         self.section_headers.iter()
@@ -273,7 +256,7 @@ impl KOFile {
         self.header.version
     }
 
-    pub fn strtab_index(&self) -> usize {
+    pub fn sh_strtab_index(&self) -> usize {
         self.sh_strtab.section_index()
     }
 
@@ -328,12 +311,20 @@ impl KOFile {
             self.update_section_header("DataSection", section_index, size)?;
         }
 
-        for i in 0..self.rel_sections.len() {
-            let rel_section = self.rel_sections.get(i).unwrap();
-            let section_index = rel_section.section_index();
-            let size = rel_section.size();
+        for i in 0..self.func_sections.len() {
+            let func_section = self.func_sections.get(i).unwrap();
+            let section_index = func_section.section_index();
+            let size = func_section.size();
 
-            self.update_section_header("RelSection", section_index, size)?;
+            self.update_section_header("FuncSection", section_index, size)?;
+        }
+
+        for i in 0..self.reld_sections.len() {
+            let reld_section = self.reld_sections.get(i).unwrap();
+            let section_index = reld_section.section_index();
+            let size = reld_section.size();
+
+            self.update_section_header("ReldSection", section_index, size)?;
         }
 
         Ok(())
@@ -385,9 +376,16 @@ impl ToBytes for KOFile {
                     }
                 }
 
-                for rel_section in self.rel_sections.iter() {
-                    if rel_section.section_index() == i {
-                        rel_section.to_bytes(&mut section_buffer);
+                for func_section in self.func_sections.iter() {
+                    if func_section.section_index() == i {
+                        func_section.to_bytes(&mut section_buffer);
+                        continue;
+                    }
+                }
+
+                for reld_section in self.reld_sections.iter() {
+                    if reld_section.section_index() == i {
+                        reld_section.to_bytes(&mut section_buffer);
                         continue;
                     }
                 }
@@ -405,15 +403,59 @@ impl FromBytes for KOFile {
     {
         let header = KOHeader::from_bytes(source, debug)?;
         let mut section_headers = Vec::with_capacity(header.num_headers() as usize);
-        let mut str_tabs = Vec::new();
-        let mut sym_tabs = Vec::new();
-        let mut data_sections = Vec::new();
-        let mut rel_sections = Vec::new();
+        let mut str_tabs;
+        let mut sym_tabs;
+        let mut data_sections;
+        let mut func_sections;
+        let mut reld_sections;
+        let mut num_str_tabs = 0;
+        let mut num_sym_tabs = 0;
+        let mut num_data_sections = 0;
+        let mut num_func_sections = 0;
+        let mut num_reld_sections = 0;
 
         for _ in 0..header.num_headers {
             let header = SectionHeader::from_bytes(source, debug)?;
+
+            match header.kind() {
+                sections::SectionKind::StrTab => {
+                    num_str_tabs += 1;
+                }
+                sections::SectionKind::SymTab => {
+                    num_sym_tabs += 1;
+                }
+                sections::SectionKind::Data => {
+                    num_data_sections += 1;
+                }
+                sections::SectionKind::Func => {
+                    num_func_sections += 1;
+                }
+                sections::SectionKind::Reld => {
+                    num_reld_sections += 1;
+                }
+                sections::SectionKind::Null
+                | sections::SectionKind::Unknown
+                | sections::SectionKind::Debug => {}
+            }
+
+            if debug {
+                println!(
+                    "Section header: Name index: {}, kind: {:?}, size: {}",
+                    header.name_idx(),
+                    header.kind(),
+                    header.size()
+                );
+            }
+
             section_headers.push(header);
         }
+
+        // Allocate now
+        str_tabs = Vec::with_capacity(num_str_tabs);
+        sym_tabs = Vec::with_capacity(num_sym_tabs);
+        data_sections = Vec::with_capacity(num_data_sections);
+        func_sections = Vec::with_capacity(num_func_sections);
+        reld_sections = Vec::with_capacity(num_reld_sections);
 
         let strtab_size = section_headers
             .get(1)
@@ -440,14 +482,18 @@ impl FromBytes for KOFile {
                     let data_section = DataSection::from_bytes(source, debug, size, i)?;
                     data_sections.push(data_section);
                 }
-                sections::SectionKind::Rel => {
-                    let rel_section = RelSection::from_bytes(source, debug, size, i)?;
-                    rel_sections.push(rel_section);
+                sections::SectionKind::Func => {
+                    let func_section = FuncSection::from_bytes(source, debug, size, i)?;
+                    func_sections.push(func_section);
+                }
+                sections::SectionKind::Reld => {
+                    let reld_section = ReldSection::from_bytes(source, debug, size, i)?;
+                    reld_sections.push(reld_section);
                 }
                 sections::SectionKind::Debug => {
                     return Err(ReadError::DebugSectionUnsupportedError);
                 }
-                _ => unreachable!(),
+                sections::SectionKind::Unknown => {}
             }
         }
 
@@ -458,7 +504,8 @@ impl FromBytes for KOFile {
             str_tabs,
             sym_tabs,
             data_sections,
-            rel_sections,
+            func_sections,
+            reld_sections,
         })
     }
 }

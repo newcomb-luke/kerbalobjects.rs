@@ -1,3 +1,5 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::iter::Peekable;
 use std::slice::Iter;
 
@@ -5,7 +7,7 @@ use crate::{FromBytes, KOSValue, ToBytes};
 
 use crate::errors::{ReadError, ReadResult};
 
-use super::{instructions::Instr, symbols::KOSymbol};
+use super::{instructions::Instr, symbols::KOSymbol, symbols::ReldEntry, SectionFromBytes};
 use std::mem;
 
 pub trait SectionIndex {
@@ -17,9 +19,10 @@ pub enum SectionKind {
     Null,
     SymTab,
     StrTab,
-    Rel,
+    Func,
     Data,
     Debug,
+    Reld,
     Unknown,
 }
 
@@ -29,9 +32,10 @@ impl From<u8> for SectionKind {
             0 => Self::Null,
             1 => Self::SymTab,
             2 => Self::StrTab,
-            3 => Self::Rel,
+            3 => Self::Func,
             4 => Self::Data,
             5 => Self::Debug,
+            6 => Self::Reld,
             _ => Self::Unknown,
         }
     }
@@ -43,9 +47,10 @@ impl From<SectionKind> for u8 {
             SectionKind::Null => 0,
             SectionKind::SymTab => 1,
             SectionKind::StrTab => 2,
-            SectionKind::Rel => 3,
+            SectionKind::Func => 3,
             SectionKind::Data => 4,
             SectionKind::Debug => 5,
+            SectionKind::Reld => 6,
             SectionKind::Unknown => 255,
         }
     }
@@ -72,6 +77,7 @@ impl FromBytes for SectionKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SectionHeader {
     name_idx: usize,
     sh_kind: SectionKind,
@@ -148,6 +154,7 @@ impl FromBytes for SectionHeader {
     }
 }
 
+#[derive(Debug)]
 pub struct SymbolTable {
     symbols: Vec<KOSymbol>,
     size: usize,
@@ -174,30 +181,17 @@ impl SymbolTable {
     }
 
     pub fn find_has_name(&self, name_idx: usize) -> Option<&KOSymbol> {
-        for symbol in self.symbols() {
-            if symbol.name_idx() == name_idx {
-                return Some(symbol);
-            }
-        }
+        self.symbols.iter().find(|sym| sym.name_idx() == name_idx)
+    }
 
-        None
+    pub fn position_by_name(&self, name_idx: usize) -> Option<usize> {
+        self.symbols
+            .iter()
+            .position(|sym| sym.name_idx() == name_idx)
     }
 
     pub fn find(&self, symbol: &KOSymbol) -> Option<usize> {
-        for (index, contained_symbol) in self.symbols().enumerate() {
-            if symbol == contained_symbol {
-                return Some(index);
-            }
-        }
-
-        None
-    }
-
-    pub fn add_checked(&mut self, symbol: KOSymbol) -> usize {
-        match self.find(&symbol) {
-            Some(index) => index,
-            None => self.add(symbol),
-        }
+        self.symbols.iter().position(|sym| sym == symbol)
     }
 
     pub fn add(&mut self, symbol: KOSymbol) -> usize {
@@ -213,8 +207,10 @@ impl SymbolTable {
     pub fn symbols(&self) -> Iter<KOSymbol> {
         self.symbols.iter()
     }
+}
 
-    pub fn from_bytes(
+impl SectionFromBytes for SymbolTable {
+    fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         debug: bool,
         size: usize,
@@ -244,9 +240,12 @@ impl ToBytes for SymbolTable {
     }
 }
 
+#[derive(Debug)]
 pub struct StringTable {
-    contents: String,
+    hashes: Vec<u64>,
+    contents: Vec<String>,
     section_index: usize,
+    size: usize,
 }
 
 impl SectionIndex for StringTable {
@@ -256,97 +255,32 @@ impl SectionIndex for StringTable {
 }
 
 impl StringTable {
-    pub fn new(size: usize, section_index: usize) -> Self {
-        let mut contents = String::with_capacity(size);
-        contents.push('\0');
+    pub fn new(amount: usize, section_index: usize) -> Self {
+        let mut contents = Vec::with_capacity(amount);
+        contents.push(String::new());
 
         StringTable {
+            hashes: Vec::new(),
             contents,
             section_index,
+            size: 1,
         }
     }
 
-    pub fn get(&self, index: usize) -> Option<&str> {
-        let mut end = index;
-
-        let mut contents_iter = self.contents.chars().skip(index);
-
-        loop {
-            if let Some(c) = contents_iter.next() {
-                if c == '\0' {
-                    break;
-                }
-
-                end += c.len_utf8();
-            } else {
-                break;
-            }
-        }
-
-        Some(&self.contents[index..end])
+    pub fn get(&self, index: usize) -> Option<&String> {
+        self.contents.get(index)
     }
 
     pub fn find(&self, s: &str) -> Option<usize> {
-        if s == "" {
-            return Some(0);
-        }
+        let mut hasher = DefaultHasher::new();
+        hasher.write(s.as_bytes());
+        let hash = hasher.finish();
 
-        let mut index = 1;
-        let mut end = index;
-        let mut contents_iter = self.contents.chars();
-
-        while contents_iter.next().is_some() {
-            loop {
-                if let Some(c) = contents_iter.next() {
-                    if c == '\0' {
-                        break;
-                    }
-
-                    end += c.len_utf8();
-                } else {
-                    break;
-                }
-            }
-
-            let next = &self.contents[index..end];
-
-            if next == s {
-                return Some(index);
-            }
-
-            index += end - index + 1;
-            end = index;
-        }
-
-        None
+        self.hashes.iter().position(|item| *item == hash)
     }
 
-    pub fn strings(&self) -> Vec<&str> {
-        let mut strs = Vec::new();
-        let mut index = 1;
-        let mut end = index;
-        let mut contents_iter = self.contents.chars();
-
-        while contents_iter.next().is_some() {
-            loop {
-                if let Some(c) = contents_iter.next() {
-                    if c == '\0' {
-                        break;
-                    }
-
-                    end += c.len_utf8();
-                } else {
-                    break;
-                }
-            }
-
-            strs.push(&self.contents[index..end]);
-
-            index += end - index + 1;
-            end = index + 1;
-        }
-
-        strs
+    pub fn strings(&self) -> Iter<String> {
+        self.contents.iter()
     }
 
     pub fn add_checked(&mut self, new_str: &str) -> usize {
@@ -357,47 +291,86 @@ impl StringTable {
     }
 
     pub fn add(&mut self, new_str: &str) -> usize {
-        let index = self.contents.len();
+        let mut hasher = DefaultHasher::new();
+        hasher.write(new_str.as_bytes());
+        let hash = hasher.finish();
 
-        self.contents.push_str(new_str);
-        self.contents.push('\0');
+        self.hashes.push(hash);
+        self.size += new_str.len() + 1;
+        self.contents.push(String::from(new_str));
 
-        index
+        self.contents.len() - 1
     }
 
     pub fn size(&self) -> u32 {
-        self.contents.len() as u32
+        self.size as u32
     }
+}
 
-    pub fn from_bytes(
+impl SectionFromBytes for StringTable {
+    fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        _debug: bool,
+        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
-        let mut s_vec = Vec::with_capacity(size);
+        let mut contents = Vec::new();
+        let mut hashes = Vec::new();
+        let mut read = 0;
 
-        for _ in 0..size {
-            let b = *source.next().ok_or(ReadError::StringTableReadError)?;
-            s_vec.push(b);
+        while read < size {
+            let mut b = Vec::new();
+
+            while read < size {
+                let c = *source.next().ok_or(ReadError::StringTableReadError)?;
+                read += 1;
+
+                if c == b'\0' {
+                    break;
+                }
+
+                b.push(c);
+            }
+
+            let s = String::from_utf8(b).map_err(|_| ReadError::StringTableReadError)?;
+
+            let mut hasher = DefaultHasher::new();
+            hasher.write(s.as_bytes());
+            let hash = hasher.finish();
+
+            hashes.push(hash);
+            contents.push(s);
         }
 
-        let contents = String::from_utf8(s_vec).map_err(|_| ReadError::StringTableReadError)?;
+        if debug {
+            println!("String table strings: ");
+
+            for s in contents.iter() {
+                println!("\t{}", s);
+            }
+        }
 
         Ok(StringTable {
+            hashes,
             contents,
             section_index,
+            size,
         })
     }
 }
 
 impl ToBytes for StringTable {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(self.contents.as_bytes());
+        for string in self.contents.iter() {
+            buf.extend_from_slice(string.as_bytes());
+            buf.push(0);
+        }
     }
 }
 
+#[derive(Debug)]
 pub struct DataSection {
+    hashes: Vec<u64>,
     data: Vec<KOSValue>,
     size: usize,
     section_index: usize,
@@ -412,6 +385,7 @@ impl SectionIndex for DataSection {
 impl DataSection {
     pub fn new(amount: usize, section_index: usize) -> Self {
         DataSection {
+            hashes: Vec::with_capacity(amount),
             data: Vec::with_capacity(amount),
             size: 0,
             section_index,
@@ -419,13 +393,11 @@ impl DataSection {
     }
 
     pub fn find(&self, value: &KOSValue) -> Option<usize> {
-        for (index, contained_value) in self.data().enumerate() {
-            if value == contained_value {
-                return Some(index);
-            }
-        }
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        let hash = hasher.finish();
 
-        None
+        self.hashes.iter().position(|item| *item == hash)
     }
 
     pub fn add_checked(&mut self, value: KOSValue) -> usize {
@@ -436,12 +408,16 @@ impl DataSection {
     }
 
     pub fn add(&mut self, value: KOSValue) -> usize {
-        let index = self.data.len();
-
         self.size += value.size_bytes();
+
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        self.hashes.push(hash);
         self.data.push(value);
 
-        index
+        self.data.len() - 1
     }
 
     pub fn get(&self, index: usize) -> Option<&KOSValue> {
@@ -455,24 +431,41 @@ impl DataSection {
     pub fn size(&self) -> u32 {
         self.size as u32
     }
+}
 
-    pub fn from_bytes(
+impl SectionFromBytes for DataSection {
+    fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
-        let mut new_size = 0;
+        let mut read = 0;
         let mut data = Vec::new();
+        let mut hashes = Vec::new();
 
-        while new_size < size {
+        while read < size {
             let kos_value = KOSValue::from_bytes(source, debug)?;
-            new_size += kos_value.size_bytes();
+            read += kos_value.size_bytes();
 
+            let mut hasher = DefaultHasher::new();
+            kos_value.hash(&mut hasher);
+            let hash = hasher.finish();
+
+            hashes.push(hash);
             data.push(kos_value);
         }
 
+        if debug {
+            println!("Data section:");
+
+            for d in data.iter() {
+                println!("\t{:?}", d);
+            }
+        }
+
         Ok(DataSection {
+            hashes,
             data,
             size,
             section_index,
@@ -488,21 +481,22 @@ impl ToBytes for DataSection {
     }
 }
 
-pub struct RelSection {
+#[derive(Debug)]
+pub struct FuncSection {
     instructions: Vec<Instr>,
     size: usize,
     section_index: usize,
 }
 
-impl SectionIndex for RelSection {
+impl SectionIndex for FuncSection {
     fn section_index(&self) -> usize {
         self.section_index
     }
 }
 
-impl RelSection {
+impl FuncSection {
     pub fn new(amount: usize, section_index: usize) -> Self {
-        RelSection {
+        FuncSection {
             instructions: Vec::with_capacity(amount),
             size: 0,
             section_index,
@@ -529,8 +523,10 @@ impl RelSection {
     pub fn instructions(&self) -> Iter<Instr> {
         self.instructions.iter()
     }
+}
 
-    pub fn from_bytes(
+impl SectionFromBytes for FuncSection {
+    fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
         debug: bool,
         size: usize,
@@ -546,7 +542,7 @@ impl RelSection {
             instructions.push(instr);
         }
 
-        Ok(RelSection {
+        Ok(FuncSection {
             instructions,
             size,
             section_index,
@@ -554,11 +550,93 @@ impl RelSection {
     }
 }
 
-impl ToBytes for RelSection {
+impl ToBytes for FuncSection {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         for instr in self.instructions.iter() {
             instr.to_bytes(buf);
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ReldSection {
+    entries: Vec<ReldEntry>,
+    size: u32,
+    section_index: usize,
+}
+
+impl SectionIndex for ReldSection {
+    fn section_index(&self) -> usize {
+        self.section_index
+    }
+}
+
+impl ReldSection {
+    pub fn new(amount: usize, section_index: usize) -> Self {
+        ReldSection {
+            entries: Vec::with_capacity(amount),
+            size: 0,
+            section_index,
+        }
+    }
+
+    pub fn add(&mut self, entry: ReldEntry) -> usize {
+        self.size += entry.size_bytes();
+        self.entries.push(entry);
+        self.entries.len() - 1
+    }
+
+    pub fn get(&self, index: usize) -> Option<&ReldEntry> {
+        self.entries.get(index)
+    }
+
+    pub fn entries(&self) -> Iter<ReldEntry> {
+        self.entries.iter()
+    }
+
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+}
+
+impl ToBytes for ReldSection {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        for reld_entry in self.entries.iter() {
+            reld_entry.to_bytes(buf);
+        }
+    }
+}
+
+impl SectionFromBytes for ReldSection {
+    fn from_bytes(
+        source: &mut Peekable<Iter<u8>>,
+        debug: bool,
+        size: usize,
+        section_index: usize,
+    ) -> ReadResult<Self> {
+        let mut read = 0;
+        let mut entries = Vec::new();
+
+        if debug {
+            println!("Reld section:");
+        }
+
+        while read < size {
+            let entry = ReldEntry::from_bytes(source, debug)?;
+            read += entry.size_bytes() as usize;
+
+            if debug {
+                println!("\t{:?}", entry);
+            }
+
+            entries.push(entry);
+        }
+
+        Ok(ReldSection {
+            entries,
+            size: size as u32,
+            section_index,
+        })
     }
 }
 
@@ -601,7 +679,7 @@ mod tests {
 
         let index = strtab.add("world");
 
-        assert_eq!(index, 7);
+        assert_eq!(index, 2);
         assert_eq!(strtab.get(index).unwrap(), "world");
     }
 
@@ -613,11 +691,12 @@ mod tests {
         strtab.add("rust");
         strtab.add("world");
 
-        let strs = strtab.strings();
+        let mut strs = strtab.strings();
 
-        assert_eq!(strs[0], "Hello");
-        assert_eq!(strs[1], "rust");
-        assert_eq!(strs[2], "world");
+        assert_eq!(strs.next().unwrap(), "");
+        assert_eq!(strs.next().unwrap(), "Hello");
+        assert_eq!(strs.next().unwrap(), "rust");
+        assert_eq!(strs.next().unwrap(), "world");
     }
 
     #[test]
@@ -625,10 +704,9 @@ mod tests {
         let mut strtab = StringTable::new(8, 0);
         let mut symtab = SymbolTable::new(1, 0);
 
-        let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::NoType, 3);
-
         let s_index = strtab.add("fn_add");
-        sym.set_name_idx(s_index);
+
+        let sym = KOSymbol::new(s_index, 0, 0, SymBind::Local, SymType::Func, 3);
 
         let sym_index = symtab.add(sym);
 
@@ -640,10 +718,9 @@ mod tests {
         let mut strtab = StringTable::new(8, 0);
         let mut symtab = SymbolTable::new(1, 0);
 
-        let mut sym = KOSymbol::new(0, 0, SymBind::Local, SymType::NoType, 3);
-
         let s_index = strtab.add("fn_add");
-        sym.set_name_idx(s_index);
+
+        let sym = KOSymbol::new(s_index, 0, 0, SymBind::Local, SymType::Func, 3);
 
         let sym_index = symtab.add(sym);
 

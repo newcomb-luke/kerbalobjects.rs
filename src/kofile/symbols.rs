@@ -113,7 +113,7 @@ impl FromBytes for SymType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KOSymbol {
     name_idx: usize,
     value_idx: usize,
@@ -125,6 +125,7 @@ pub struct KOSymbol {
 
 impl KOSymbol {
     pub fn new(
+        name_idx: usize,
         value_idx: usize,
         size: u16,
         sym_bind: SymBind,
@@ -132,7 +133,7 @@ impl KOSymbol {
         sh_idx: u16,
     ) -> Self {
         KOSymbol {
-            name_idx: 0,
+            name_idx,
             value_idx,
             size,
             sym_bind,
@@ -141,32 +142,52 @@ impl KOSymbol {
         }
     }
 
-    pub fn set_name_idx(&mut self, name_idx: usize) {
-        self.name_idx = name_idx;
-    }
-
     pub fn name_idx(&self) -> usize {
         self.name_idx
+    }
+
+    pub fn set_name_idx(&mut self, name_idx: usize) {
+        self.name_idx = name_idx;
     }
 
     pub fn value_idx(&self) -> usize {
         self.value_idx
     }
 
+    pub fn set_value_idx(&mut self, value_idx: usize) {
+        self.value_idx = value_idx;
+    }
+
     pub fn size(&self) -> u16 {
         self.size
+    }
+
+    pub fn set_size(&mut self, size: u16) {
+        self.size = size;
     }
 
     pub fn sym_bind(&self) -> SymBind {
         self.sym_bind
     }
 
+    pub fn set_sym_bind(&mut self, sym_bind: SymBind) {
+        self.sym_bind = sym_bind;
+    }
+
     pub fn sym_type(&self) -> SymType {
         self.sym_type
     }
 
+    pub fn set_sym_type(&mut self, sym_type: SymType) {
+        self.sym_type = sym_type;
+    }
+
     pub fn sh_idx(&self) -> u16 {
         self.sh_idx
+    }
+
+    pub fn set_sh_idx(&mut self, sh_idx: u16) {
+        self.sh_idx = sh_idx;
     }
 
     pub fn size_bytes() -> u32 {
@@ -210,6 +231,79 @@ impl FromBytes for KOSymbol {
             sym_bind,
             sym_type,
             sh_idx,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReldEntry {
+    section_index: usize,
+    instr_index: usize,
+    operand_index: usize,
+    symbol_index: usize,
+}
+
+impl ReldEntry {
+    pub fn new(
+        section_index: usize,
+        instr_index: usize,
+        operand_index: usize,
+        symbol_index: usize,
+    ) -> Self {
+        ReldEntry {
+            section_index,
+            instr_index,
+            operand_index,
+            symbol_index,
+        }
+    }
+
+    pub fn section_index(&self) -> usize {
+        self.section_index
+    }
+
+    pub fn instr_index(&self) -> usize {
+        self.instr_index
+    }
+
+    pub fn operand_index(&self) -> usize {
+        self.operand_index
+    }
+
+    pub fn symbol_index(&self) -> usize {
+        self.symbol_index
+    }
+
+    pub fn size_bytes(&self) -> u32 {
+        4 * 4
+    }
+}
+
+impl ToBytes for ReldEntry {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        (self.section_index as u32).to_bytes(buf);
+        (self.instr_index as u32).to_bytes(buf);
+        (self.operand_index as u8).to_bytes(buf);
+        (self.symbol_index as u32).to_bytes(buf);
+    }
+}
+
+impl FromBytes for ReldEntry {
+    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
+        let section_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let instr_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let operand_index =
+            u8::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+        let symbol_index =
+            u32::from_bytes(source, debug).map_err(|_| ReadError::ReldReadError)? as usize;
+
+        Ok(ReldEntry {
+            section_index,
+            instr_index,
+            operand_index,
+            symbol_index,
         })
     }
 }

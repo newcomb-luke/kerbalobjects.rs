@@ -6,6 +6,7 @@ use crate::{FromBytes, KOSValue, ReadError, ReadResult, ToBytes};
 
 use super::Instr;
 
+#[derive(Debug)]
 pub struct ArgumentSection {
     num_index_bytes: usize,
     arguments: Vec<KOSValue>,
@@ -186,6 +187,7 @@ impl FromBytes for CodeType {
     }
 }
 
+#[derive(Debug)]
 pub struct CodeSection {
     section_type: CodeType,
     instructions: Vec<Instr>,
@@ -425,6 +427,7 @@ impl DebugEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct DebugSection {
     range_size: usize,
     debug_entries: Vec<DebugEntry>,

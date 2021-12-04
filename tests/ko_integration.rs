@@ -2,10 +2,8 @@ use std::io::{Read, Write};
 
 use kerbalobjects::{
     kofile::{
-        self,
         instructions::Instr,
-        sections::{DataSection, RelSection, SectionHeader, StringTable, SymbolTable},
-        symbols::{KOSymbol, SymBind, SymType},
+        symbols::{KOSymbol, ReldEntry},
         KOFile,
     },
     FromBytes, KOSValue, Opcode, ToBytes,
@@ -20,102 +18,80 @@ fn write_and_read_ko() {
 fn write_kofile() {
     let mut ko = KOFile::new();
 
-    let symstrtab_str_index = ko.add_shstr(".symstrtab");
-    let sh_symstrtab =
-        SectionHeader::new(symstrtab_str_index, kofile::sections::SectionKind::StrTab);
-    let sh_symstrtab_index = ko.add_header(sh_symstrtab);
-
-    let symtab_str_index = ko.add_shstr(".symtab");
-    let sh_symtab = SectionHeader::new(symtab_str_index, kofile::sections::SectionKind::SymTab);
-    let sh_symtab_index = ko.add_header(sh_symtab);
-
-    let datatab_str_index = ko.add_shstr(".data");
-    let sh_datatab = SectionHeader::new(datatab_str_index, kofile::sections::SectionKind::Data);
-    let sh_datatab_index = ko.add_header(sh_datatab);
-
-    let text_str_index = ko.add_shstr(".text");
-    let sh_text = SectionHeader::new(text_str_index, kofile::sections::SectionKind::Rel);
-    let sh_text_index = ko.add_header(sh_text);
-
-    let mut symstrtab = StringTable::new(2, sh_symstrtab_index);
-    let mut symtab = SymbolTable::new(2, sh_symtab_index);
-    let mut datatab = DataSection::new(2, sh_datatab_index);
-    let mut text = RelSection::new(2, sh_text_index);
-
-    let file_sym_str = symstrtab.add("test.kasm");
-    let mut file_sym = KOSymbol::new(
-        0,
-        0,
-        kofile::symbols::SymBind::Local,
-        kofile::symbols::SymType::File,
-        0,
-    );
-    file_sym.set_name_idx(file_sym_str);
-    symtab.add(file_sym);
+    let mut data_section = ko.new_datasection(".data");
+    let mut start = ko.new_funcsection("_start");
+    let mut symtab = ko.new_symtab(".symtab");
+    let mut symstrtab = ko.new_strtab(".symstrtab");
+    let mut reld_section = ko.new_reldsection(".reld");
 
     let print_value = KOSValue::String(String::from("print()"));
-    let print_value_size = print_value.size_bytes();
-    let print_value_index = datatab.add(print_value);
-    let print_sym = KOSymbol::new(
-        print_value_index,
-        print_value_size as u16,
-        kofile::symbols::SymBind::Local,
-        kofile::symbols::SymType::NoType,
-        sh_datatab_index as u16,
-    );
-    let print_sym_index = symtab.add(print_sym);
+    let print_value_index = data_section.add(print_value);
 
     let empty_value = KOSValue::String(String::from(""));
-    let empty_value_size = empty_value.size_bytes();
-    let empty_value_index = datatab.add(empty_value);
-    let empty_sym = KOSymbol::new(
-        empty_value_index,
-        empty_value_size as u16,
-        kofile::symbols::SymBind::Local,
-        kofile::symbols::SymType::NoType,
-        sh_datatab_index as u16,
-    );
-    let empty_sym_index = symtab.add(empty_sym);
+    let empty_value_index = data_section.add(empty_value);
 
     let two_value = KOSValue::ScalarInt(2);
-    let two_value_size = two_value.size_bytes();
-    let two_value_index = datatab.add(two_value);
-    let two_sym = KOSymbol::new(
-        two_value_index,
-        two_value_size as u16,
-        kofile::symbols::SymBind::Local,
-        kofile::symbols::SymType::NoType,
-        sh_datatab_index as u16,
-    );
-    let two_sym_index = symtab.add(two_sym);
+    let two_value_index = data_section.add(two_value);
 
     let marker_value = KOSValue::ArgMarker;
     let marker_value_size = marker_value.size_bytes();
-    let marker_value_index = datatab.add(marker_value);
-    let marker_sym = KOSymbol::new(
+    let marker_value_index = data_section.add(marker_value);
+
+    let marker_symbol_name_idx = symstrtab.add("marker");
+
+    let marker_symbol = KOSymbol::new(
+        marker_symbol_name_idx,
         marker_value_index,
         marker_value_size as u16,
-        SymBind::Local,
-        SymType::NoType,
-        sh_datatab_index as u16,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::NoType,
+        2,
     );
-    let marker_sym_index = symtab.add(marker_sym);
+    let marker_symbol_index = symtab.add(marker_symbol);
 
-    let push_two_instr = Instr::OneOp(Opcode::Push, two_sym_index);
+    let reld_entry = ReldEntry::new(3, 0, 0, marker_symbol_index);
+
+    reld_section.add(reld_entry);
+
+    let push_two_instr = Instr::OneOp(Opcode::Push, two_value_index);
     let add_instr = Instr::ZeroOp(Opcode::Add);
-    let push_marker = Instr::OneOp(Opcode::Push, marker_sym_index);
-    let call_print = Instr::TwoOp(Opcode::Call, empty_sym_index, print_sym_index);
+    let push_marker = Instr::OneOp(Opcode::Push, marker_symbol_index);
+    let call_print = Instr::TwoOp(Opcode::Call, empty_value_index, print_value_index);
 
-    text.add(push_marker);
-    text.add(push_two_instr);
-    text.add(push_two_instr);
-    text.add(add_instr);
-    text.add(call_print);
+    start.add(push_marker);
+    start.add(push_two_instr);
+    start.add(push_two_instr);
+    start.add(add_instr);
+    start.add(call_print);
 
+    let start_symbol_name_idx = symstrtab.add("_start");
+    let start_symbol = KOSymbol::new(
+        start_symbol_name_idx,
+        0,
+        start.size() as u16,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::Func,
+        3,
+    );
+
+    let file_symbol_name_idx = symstrtab.add("test.ko");
+    let file_symbol = KOSymbol::new(
+        file_symbol_name_idx,
+        0,
+        0,
+        kerbalobjects::kofile::symbols::SymBind::Global,
+        kerbalobjects::kofile::symbols::SymType::File,
+        0,
+    );
+
+    symtab.add(file_symbol);
+    symtab.add(start_symbol);
+
+    ko.add_data_section(data_section);
+    ko.add_func_section(start);
     ko.add_str_tab(symstrtab);
     ko.add_sym_tab(symtab);
-    ko.add_data_section(datatab);
-    ko.add_rel_section(text);
+    ko.add_reld_section(reld_section);
 
     let mut file_buffer = Vec::with_capacity(2048);
 
