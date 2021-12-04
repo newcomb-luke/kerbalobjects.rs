@@ -8,7 +8,6 @@ use crate::{FromBytes, KOSValue, ToBytes};
 use crate::errors::{ReadError, ReadResult};
 
 use super::{instructions::Instr, symbols::KOSymbol, symbols::ReldEntry, SectionFromBytes};
-use std::mem;
 
 pub trait SectionIndex {
     fn section_index(&self) -> usize;
@@ -170,7 +169,7 @@ impl SectionIndex for SymbolTable {
 impl SymbolTable {
     pub fn new(amount: usize, section_index: usize) -> Self {
         SymbolTable {
-            symbols: Vec::with_capacity(amount * mem::size_of::<KOSymbol>()),
+            symbols: Vec::with_capacity(amount),
             size: 0,
             section_index,
         }
@@ -256,8 +255,15 @@ impl SectionIndex for StringTable {
 
 impl StringTable {
     pub fn new(amount: usize, section_index: usize) -> Self {
+        let empty = String::new();
+        let mut hasher = DefaultHasher::new();
+        hasher.write(empty.as_bytes());
+        let hash = hasher.finish();
+
         let mut contents = Vec::with_capacity(amount);
-        contents.push(String::new());
+        contents.push(empty);
+        let mut hashes = Vec::with_capacity(amount);
+        hashes.push(hash);
 
         StringTable {
             hashes: Vec::new(),
