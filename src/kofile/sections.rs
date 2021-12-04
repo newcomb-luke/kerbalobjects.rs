@@ -266,7 +266,7 @@ impl StringTable {
         hashes.push(hash);
 
         StringTable {
-            hashes: Vec::new(),
+            hashes,
             contents,
             section_index,
             size: 1,
