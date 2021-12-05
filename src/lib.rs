@@ -801,7 +801,7 @@ impl From<Opcode> for &str {
             Opcode::Stol => "stol",
             Opcode::Stog => "stog",
             Opcode::Bscp => "bscp",
-            Opcode::Escp => "ecsp",
+            Opcode::Escp => "escp",
             Opcode::Stoe => "stoe",
             Opcode::Phdl => "phdl",
             Opcode::Btr => "btr",
