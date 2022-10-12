@@ -5,9 +5,9 @@
 [<img src="https://img.shields.io/badge/docs.rs-kerbalobjects-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="github" height="20">](https://docs.rs/kerbalobjects/latest/kerbalobjects/)
 [<img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/newcomb-luke/kerbalobjects.rs/Rust%20CI">]()
 
-[<img alt="Libraries.io dependency status for GitHub repo" src="https://img.shields.io/librariesio/github/newcomb-luke/kerbalobjects.rs?style=for-the-badge">](https://deps.rs/repo/github/newcomb-luke/kerbalobjects.rs)
-[<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/kerbalobjects.rs?style=for-the-badge">]()
-[<img alt="Crates.io" src="https://img.shields.io/crates/d/kerbalobjects?style=for-the-badge">]()
+[<img alt="Libraries.io dependency status for GitHub repo" src="https://img.shields.io/librariesio/github/newcomb-luke/kerbalobjects.rs?style=for-the-badge" height="20">](https://deps.rs/repo/github/newcomb-luke/kerbalobjects.rs)
+[<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/kerbalobjects.rs?style=for-the-badge" height="20">]()
+[<img alt="Crates.io" src="https://img.shields.io/crates/d/kerbalobjects?style=for-the-badge" height="20">]()
 
 ```toml
 [dependencies]
