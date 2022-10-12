@@ -217,8 +217,8 @@ impl FromBytes for KOSymbol {
         let value_idx = u32::from_bytes(source)
             .map_err(|_| ReadError::KOSymbolConstantReadError("value index"))?
             as usize;
-        let size = u16::from_bytes(source)
-            .map_err(|_| ReadError::KOSymbolConstantReadError("size"))?;
+        let size =
+            u16::from_bytes(source).map_err(|_| ReadError::KOSymbolConstantReadError("size"))?;
         let sym_bind = SymBind::from_bytes(source)?;
         let sym_type = SymType::from_bytes(source)?;
         let sh_idx = u16::from_bytes(source)
@@ -291,14 +291,10 @@ impl ToBytes for ReldEntry {
 // TODO: Docs but also rewrite
 impl FromBytes for ReldEntry {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
-        let section_index =
-            u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
-        let instr_index =
-            u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
-        let operand_index =
-            u8::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
-        let symbol_index =
-            u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
+        let section_index = u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
+        let instr_index = u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
+        let operand_index = u8::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
+        let symbol_index = u32::from_bytes(source).map_err(|_| ReadError::ReldReadError)? as usize;
 
         Ok(ReldEntry {
             section_index,

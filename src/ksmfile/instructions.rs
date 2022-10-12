@@ -20,10 +20,7 @@ impl Instr {
             }
             3 => {
                 let slice = &(operand as u32).to_be_bytes();
-
-                for i in 1..4 {
-                    buf.push(slice[i]);
-                }
+                buf.extend_from_slice(&slice[0..3]);
             }
             4 => {
                 buf.extend_from_slice(&(operand as u32).to_be_bytes());
@@ -32,17 +29,14 @@ impl Instr {
         }
     }
 
-    fn read_operand(
-        source: &mut Peekable<Iter<u8>>,
-        num_index_bytes: usize,
-    ) -> ReadResult<usize> {
+    fn read_operand(source: &mut Peekable<Iter<u8>>, num_index_bytes: usize) -> ReadResult<usize> {
         Ok(match num_index_bytes {
             1 => (u8::from_bytes(source).map_err(|_| ReadError::OperandReadError))? as usize,
             2 => {
                 let mut slice = [0u8; 2];
-                for i in 0..2 {
+                for b in &mut slice {
                     if let Some(&byte) = source.next() {
-                        slice[i] = byte;
+                        *b = byte;
                     } else {
                         return Err(ReadError::OperandReadError);
                     }
@@ -50,12 +44,10 @@ impl Instr {
                 u16::from_be_bytes(slice) as usize
             }
             3 => {
-                let first =
-                    u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
+                let first = u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
                 let second =
                     u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
-                let third =
-                    u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
+                let third = u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
 
                 let mut full = third;
                 full += second << 8;
@@ -65,9 +57,9 @@ impl Instr {
             }
             4 => {
                 let mut slice = [0u8; 4];
-                for i in 0..4 {
+                for b in &mut slice {
                     if let Some(&byte) = source.next() {
-                        slice[i] = byte;
+                        *b = byte;
                     } else {
                         return Err(ReadError::OperandReadError);
                     }
@@ -95,10 +87,7 @@ impl Instr {
         }
     }
 
-    pub fn from_bytes(
-        source: &mut Peekable<Iter<u8>>,
-        num_index_bytes: usize,
-    ) -> ReadResult<Self> {
+    pub fn from_bytes(source: &mut Peekable<Iter<u8>>, num_index_bytes: usize) -> ReadResult<Self> {
         let opcode = Opcode::from_bytes(source)?;
 
         Ok(match opcode.num_operands() {

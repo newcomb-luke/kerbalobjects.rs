@@ -56,15 +56,12 @@ impl FromBytes for Instr {
         Ok(match opcode.num_operands() {
             0 => Instr::ZeroOp(opcode),
             1 => {
-                let op1 =
-                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
                 Instr::OneOp(opcode, op1 as usize)
             }
             _ => {
-                let op1 =
-                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
-                let op2 =
-                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
+                let op2 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
                 Instr::TwoOp(opcode, op1 as usize, op2 as usize)
             }
         })

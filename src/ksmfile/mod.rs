@@ -66,6 +66,12 @@ impl KSMFile {
     }
 }
 
+impl Default for KSMFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToBytes for KSMFile {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         let mut uncompressed_buf = Vec::with_capacity(2048);
@@ -100,14 +106,14 @@ impl FromBytes for KSMFile {
     where
         Self: Sized,
     {
-        let zipped_contents: Vec<u8> = source.map(|b| *b).collect();
+        let zipped_contents: Vec<u8> = source.copied().collect();
         let mut decoder = GzDecoder::new(zipped_contents.as_slice());
 
         let mut decompressed: Vec<u8> = Vec::with_capacity(2048);
 
         decoder
             .read_to_end(&mut decompressed)
-            .map_err(|e| ReadError::KSMDecompressionError(e))?;
+            .map_err(ReadError::KSMDecompressionError)?;
 
         let mut decompressed_source = decompressed.iter().peekable();
 
@@ -166,6 +172,12 @@ impl KSMHeader {
     }
 }
 
+impl Default for KSMHeader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToBytes for KSMHeader {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         self.magic.to_bytes(buf);
@@ -177,8 +189,8 @@ impl FromBytes for KSMHeader {
     where
         Self: Sized,
     {
-        let magic = u32::from_bytes(source)
-            .map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
+        let magic =
+            u32::from_bytes(source).map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
 
         if magic != KSM_MAGIC_NUMBER {
             return Err(ReadError::InvalidKSMFileMagicError);

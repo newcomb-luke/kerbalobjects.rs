@@ -1,3 +1,4 @@
+use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::iter::Peekable;
@@ -37,7 +38,7 @@ pub trait FromBytes {
 /// type used when there are any user-created values, as opposed to instruction operands. See
 /// KSM docs for more information.
 ///
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum KOSValue {
     /// A null value, rarely used. Only takes up 1 byte.
     Null,
@@ -138,6 +139,17 @@ impl Hash for KOSValue {
     }
 }
 
+impl PartialEq for KOSValue {
+    fn eq(&self, other: &Self) -> bool {
+        let mut hasher_1 = DefaultHasher::new();
+        self.hash(&mut hasher_1);
+        let mut hasher_2 = DefaultHasher::new();
+        other.hash(&mut hasher_2);
+
+        hasher_1.finish() == hasher_2.finish()
+    }
+}
+
 impl ToBytes for KOSValue {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         match self {
@@ -207,18 +219,18 @@ impl FromBytes for KOSValue {
         match kos_type_value {
             t if t < 13 => match t {
                 0 => Ok(KOSValue::Null),
-                1 => bool::from_bytes(source).map(|b| KOSValue::Bool(b)),
-                2 => i8::from_bytes(source).map(|b| KOSValue::Byte(b)),
-                3 => i16::from_bytes(source).map(|i| KOSValue::Int16(i)),
-                4 => i32::from_bytes(source).map(|i| KOSValue::Int32(i)),
-                5 => f32::from_bytes(source).map(|f| KOSValue::Float(f)),
-                6 => f64::from_bytes(source).map(|d| KOSValue::Double(d)),
-                7 => String::from_bytes(source).map(|s| KOSValue::String(s)),
+                1 => bool::from_bytes(source).map(KOSValue::Bool),
+                2 => i8::from_bytes(source).map(KOSValue::Byte),
+                3 => i16::from_bytes(source).map(KOSValue::Int16),
+                4 => i32::from_bytes(source).map(KOSValue::Int32),
+                5 => f32::from_bytes(source).map(KOSValue::Float),
+                6 => f64::from_bytes(source).map(KOSValue::Double),
+                7 => String::from_bytes(source).map(KOSValue::String),
                 8 => Ok(KOSValue::ArgMarker),
-                9 => i32::from_bytes(source).map(|i| KOSValue::ScalarInt(i)),
-                10 => f64::from_bytes(source).map(|d| KOSValue::ScalarDouble(d)),
-                11 => bool::from_bytes(source).map(|b| KOSValue::BoolValue(b)),
-                12 => String::from_bytes(source).map(|s| KOSValue::StringValue(s)),
+                9 => i32::from_bytes(source).map(KOSValue::ScalarInt),
+                10 => f64::from_bytes(source).map(KOSValue::ScalarDouble),
+                11 => bool::from_bytes(source).map(KOSValue::BoolValue),
+                12 => String::from_bytes(source).map(KOSValue::StringValue),
                 _ => unreachable!(),
             }
             .map_err(|_| ReadError::KOSValueReadError),
@@ -304,7 +316,7 @@ impl FromBytes for bool {
 
 impl FromBytes for u8 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
-        source.next().map(|&x| x).ok_or(ReadError::UnexpectedEOF)
+        source.next().copied().ok_or(ReadError::UnexpectedEOF)
     }
 }
 
@@ -320,9 +332,9 @@ impl FromBytes for i8 {
 impl FromBytes for u16 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 2];
-        for i in 0..2 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }
@@ -334,9 +346,9 @@ impl FromBytes for u16 {
 impl FromBytes for i16 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 2];
-        for i in 0..2 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }
@@ -348,9 +360,9 @@ impl FromBytes for i16 {
 impl FromBytes for u32 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
-        for i in 0..4 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }
@@ -362,9 +374,9 @@ impl FromBytes for u32 {
 impl FromBytes for i32 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
-        for i in 0..4 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }
@@ -376,9 +388,9 @@ impl FromBytes for i32 {
 impl FromBytes for f32 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 4];
-        for i in 0..4 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }
@@ -390,9 +402,9 @@ impl FromBytes for f32 {
 impl FromBytes for f64 {
     fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
         let mut slice = [0u8; 8];
-        for i in 0..8 {
+        for b in &mut slice {
             if let Some(&byte) = source.next() {
-                slice[i] = byte;
+                *b = byte;
             } else {
                 return Err(ReadError::UnexpectedEOF);
             }

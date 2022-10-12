@@ -341,6 +341,12 @@ impl KOFile {
     }
 }
 
+impl Default for KOFile {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToBytes for KOFile {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         self.header.to_bytes(buf);
@@ -558,8 +564,8 @@ impl FromBytes for KOHeader {
     where
         Self: Sized,
     {
-        let magic = u32::from_bytes(source)
-            .map_err(|_| ReadError::KOHeaderReadError("file magic"))?;
+        let magic =
+            u32::from_bytes(source).map_err(|_| ReadError::KOHeaderReadError("file magic"))?;
         let version =
             u8::from_bytes(source).map_err(|_| ReadError::KOHeaderReadError("version"))?;
         let num_headers = u16::from_bytes(source)
