@@ -62,7 +62,7 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -134,15 +134,15 @@ impl ToBytes for SectionHeader {
 }
 
 impl FromBytes for SectionHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let name_idx = u32::from_bytes(source, debug)
+        let name_idx = u32::from_bytes(source)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("name index"))?
             as usize;
-        let sh_kind = SectionKind::from_bytes(source, debug)?;
-        let size = u32::from_bytes(source, debug)
+        let sh_kind = SectionKind::from_bytes(source)?;
+        let size = u32::from_bytes(source)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("size"))?;
 
         Ok(SectionHeader {
@@ -211,7 +211,6 @@ impl SymbolTable {
 impl SectionFromBytes for SymbolTable {
     fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -221,7 +220,7 @@ impl SectionFromBytes for SymbolTable {
         let mut sym_tab = SymbolTable::new(num_symbols as usize, section_index);
 
         while (read_symbols * KOSymbol::size_bytes() as usize) < size {
-            let symbol = KOSymbol::from_bytes(source, debug)?;
+            let symbol = KOSymbol::from_bytes(source)?;
             read_symbols += 1;
 
             sym_tab.add(symbol);
@@ -316,7 +315,6 @@ impl StringTable {
 impl SectionFromBytes for StringTable {
     fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -348,7 +346,8 @@ impl SectionFromBytes for StringTable {
             contents.push(s);
         }
 
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("String table strings: ");
 
             for s in contents.iter() {
@@ -442,7 +441,6 @@ impl DataSection {
 impl SectionFromBytes for DataSection {
     fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -451,7 +449,7 @@ impl SectionFromBytes for DataSection {
         let mut hashes = Vec::new();
 
         while read < size {
-            let kos_value = KOSValue::from_bytes(source, debug)?;
+            let kos_value = KOSValue::from_bytes(source)?;
             read += kos_value.size_bytes();
 
             let mut hasher = DefaultHasher::new();
@@ -462,7 +460,8 @@ impl SectionFromBytes for DataSection {
             data.push(kos_value);
         }
 
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("Data section:");
 
             for d in data.iter() {
@@ -534,7 +533,6 @@ impl FuncSection {
 impl SectionFromBytes for FuncSection {
     fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
@@ -542,7 +540,7 @@ impl SectionFromBytes for FuncSection {
         let mut instructions = Vec::new();
 
         while new_size < size {
-            let instr = Instr::from_bytes(source, debug)?;
+            let instr = Instr::from_bytes(source)?;
             new_size += instr.size_bytes();
 
             instructions.push(instr);
@@ -616,22 +614,23 @@ impl ToBytes for ReldSection {
 impl SectionFromBytes for ReldSection {
     fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         size: usize,
         section_index: usize,
     ) -> ReadResult<Self> {
         let mut read = 0;
         let mut entries = Vec::new();
 
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("Reld section:");
         }
 
         while read < size {
-            let entry = ReldEntry::from_bytes(source, debug)?;
+            let entry = ReldEntry::from_bytes(source)?;
             read += entry.size_bytes() as usize;
 
-            if debug {
+            #[cfg(feature = "print_debug")]
+            {
                 println!("\t{:?}", entry);
             }
 

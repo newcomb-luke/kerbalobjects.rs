@@ -34,11 +34,10 @@ impl Instr {
 
     fn read_operand(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         num_index_bytes: usize,
     ) -> ReadResult<usize> {
         Ok(match num_index_bytes {
-            1 => (u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError))? as usize,
+            1 => (u8::from_bytes(source).map_err(|_| ReadError::OperandReadError))? as usize,
             2 => {
                 let mut slice = [0u8; 2];
                 for i in 0..2 {
@@ -52,11 +51,11 @@ impl Instr {
             }
             3 => {
                 let first =
-                    u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
+                    u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
                 let second =
-                    u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
+                    u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
                 let third =
-                    u8::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)? as u32;
+                    u8::from_bytes(source).map_err(|_| ReadError::OperandReadError)? as u32;
 
                 let mut full = third;
                 full += second << 8;
@@ -98,21 +97,20 @@ impl Instr {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         num_index_bytes: usize,
     ) -> ReadResult<Self> {
-        let opcode = Opcode::from_bytes(source, debug)?;
+        let opcode = Opcode::from_bytes(source)?;
 
         Ok(match opcode.num_operands() {
             0 => Instr::ZeroOp(opcode),
             1 => {
-                let op1 = Instr::read_operand(source, debug, num_index_bytes)?;
+                let op1 = Instr::read_operand(source, num_index_bytes)?;
 
                 Instr::OneOp(opcode, op1)
             }
             2 => {
-                let op1 = Instr::read_operand(source, debug, num_index_bytes)?;
-                let op2 = Instr::read_operand(source, debug, num_index_bytes)?;
+                let op1 = Instr::read_operand(source, num_index_bytes)?;
+                let op2 = Instr::read_operand(source, num_index_bytes)?;
 
                 Instr::TwoOp(opcode, op1, op2)
             }

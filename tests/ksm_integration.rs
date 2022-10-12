@@ -18,7 +18,7 @@ fn read_kos_ksm() {
 
     let mut buffer_iter = buffer.iter().peekable();
 
-    let _ksm = KSMFile::from_bytes(&mut buffer_iter, true).expect("Error reading KSM file");
+    let _ksm = KSMFile::from_bytes(&mut buffer_iter).expect("Error reading KSM file");
 }
 
 #[test]
@@ -107,5 +107,5 @@ fn read_ksm() {
 
     let mut buffer_iter = buffer.iter().peekable();
 
-    let _ksm = KSMFile::from_bytes(&mut buffer_iter, true);
+    let _ksm = KSMFile::from_bytes(&mut buffer_iter);
 }

@@ -1,287 +1,123 @@
+use thiserror::Error;
+
+pub use crate::ksmfile::errors::*;
+
 pub type ReadResult<T> = Result<T, ReadError>;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ReadError {
-    ConstantReadError(ConstantReadError),
+    #[error("Error reading Kerbal Machine Code file")]
+    KSMReadError(#[from] KSMReadError),
+    #[error("Error reading file, unexpected EOF.")]
+    UnexpectedEOF,
+    #[error("Error reading opcode for instruction, ran out of bytes.")]
     OpcodeReadError,
+    #[error("Error reading opcode for instruction, value {0:x} is not a valid opcode.")]
     BogusOpcodeReadError(u8),
+    #[error("Error reading operand for instruction, ran out of bytes.")]
     OperandReadError,
+    #[error("Error reading symbol binding, ran out of bytes.")]
     SymBindReadError,
+    #[error("Error reading symbol binding, unknown binding with value {0:x}")]
     UnknownSimBindReadError(u8),
+    #[error("Error reading symbol type, ran out of bytes.")]
     SymTypeReadError,
+    #[error("Error reading symbol type, unknown type with value {0:x}.")]
     UnknownSimTypeReadError(u8),
+    #[error("Error reading symbol while parsing constant for {0}, ran out of bytes.")]
     KOSymbolConstantReadError(&'static str),
+    #[error("Error reading kOS value, unknown type with value {0:x}.")]
     KOSValueTypeReadError(u8),
+    #[error("Error reading kOS value, ran out of bytes.")]
     KOSValueReadError,
+    #[error("Error reading section kind, ran out of bytes.")]
     SectionKindReadError,
+    #[error("Error reading section kind, unknown kind with value {0:x}")]
     UnknownSectionKindReadError(u8),
+    #[error("Error reading section header while parsing constant {0}, ran out of bytes.")]
     SectionHeaderConstantReadError(&'static str),
+    #[error("Error reading string table, ran out of bytes.")]
     StringTableReadError,
+    #[error(
+        "Error reading KerbalObject file header while parsing constant {0}, ran out of bytes."
+    )]
     KOHeaderReadError(&'static str),
+    #[error(
+        "Error reading kerbal machine code file while parsing constant {0}, ran out of bytes."
+    )]
     KSMHeaderReadError(&'static str),
+    #[error("Error reading KerbalObject file, unsupported KO file version {0}")]
     VersionMismatchError(u8),
+    #[error("Error reading KerbalObject file, debug sections are currently unsupported.")]
     DebugSectionUnsupportedError,
+    #[error("Error reading KerbalObject file, expected section: {0}")]
     MissingSectionError(&'static str),
+    #[error("Error reading KerbalObject file, input file does not appear to be a KO file.")]
     InvalidKOFileMagicError,
+    #[error(
+        "Error reading Kerbal Machine Code file, input file does not appear to be a KSM file."
+    )]
     InvalidKSMFileMagicError,
+    #[error("Error while trying to decompress Kerbal Machine Code file: {0}")]
     KSMDecompressionError(std::io::Error),
+    #[error(
+        "Error reading Kerbal Machine Code file, expected argument section, ran out of bytes."
+    )]
     MissingArgumentSectionError,
+    #[error(
+        "Error reading Kerbal Machine Code file, expected argument section, instead found {0:x}"
+    )]
     ExpectedArgumentSectionError(u16),
+    #[error("Error reading Kerbal Machine Code file argument section num index bytes, ran out of bytes.")]
     NumIndexBytesReadError,
+    #[error("Error reading Kerbal Machine Code file argument section num index bytes, invalid number: {0}")]
     InvalidNumIndexBytesError(usize),
+    #[error("Error reading Kerbal Machine Code file argument section, expected argument, ran out of bytes.")]
     ArgumentSectionReadError,
+    #[error("Error reading KSM section type, ran out of bytes.")]
     CodeTypeReadError,
+    #[error("Error reading KSM section type, unknown type with value: {0}")]
     UnknownCodeTypeReadError(char),
+    #[error("Error reading KSM file, expected code section, ran out of bytes.")]
     MissingCodeSectionError,
+    #[error("Error reading KSM file, expected code section, found {0:?}.")]
     ExpectedCodeSectionError(u8),
+    #[error("Error reading relocation data, ran out of bytes.")]
     ReldReadError,
+    #[error("Error reading code section, ran out of bytes.")]
     CodeSectionReadError,
+    #[error("Error reading debug section, ran out of bytes.")]
     DebugRangeReadError,
+    #[error("Error reading debug entry, ran out of bytes.")]
     DebugEntryReadError,
+    #[error("Error reading KSM file debug section, expected debug section, ran out of bytes.")]
     MissingDebugSectionError,
+    #[error("Error reading KSM file, expected debug section header, found {0:?}.")]
     ExpectedDebugSectionError(u8),
+    #[error("Error reading KSM file debug section, ran out of bytes.")]
     DebugSectionReadError,
 }
 
-#[derive(Debug)]
-pub enum ConstantReadError {
+#[derive(Debug, Error)]
+pub enum KOSValueReadError {
+    #[error("boolean")]
     BoolReadError,
+    #[error("unsigned byte")]
     U8ReadError,
+    #[error("signed byte")]
     I8ReadError,
+    #[error("unsigned 16-bit integer")]
     U16ReadError,
+    #[error("signed 16-bit integer")]
     I16ReadError,
+    #[error("unsigned 32-bit integer")]
     U32ReadError,
+    #[error("signed 32-bit integer")]
     I32ReadError,
+    #[error("float")]
     F32ReadError,
+    #[error("double")]
     F64ReadError,
+    #[error("string")]
     StringReadError,
-}
-
-impl std::error::Error for ReadError {}
-impl std::error::Error for ConstantReadError {}
-
-impl std::fmt::Display for ReadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ReadError::ConstantReadError(e) => {
-                write!(f, "Error reading constant of type {}, ran out of bytes.", e)
-            }
-            ReadError::OpcodeReadError => {
-                write!(f, "Error reading opcode for instruction, ran out of bytes.")
-            }
-            ReadError::BogusOpcodeReadError(v) => {
-                write!(
-                    f,
-                    "Error reading opcode for instruction, value {:x} is not a valid opcode",
-                    v
-                )
-            }
-            ReadError::OperandReadError => {
-                write!(
-                    f,
-                    "Error reading operand for instruction, ran out of bytes."
-                )
-            }
-            ReadError::SymBindReadError => {
-                write!(f, "Error reading symbol binding, ran out of bytes.")
-            }
-            ReadError::UnknownSimBindReadError(v) => {
-                write!(
-                    f,
-                    "Error reading symbol binding, unknown binding with value {:x}",
-                    v
-                )
-            }
-            ReadError::SymTypeReadError => {
-                write!(f, "Error reading symbol type, ran out of bytes.")
-            }
-            ReadError::UnknownSimTypeReadError(v) => {
-                write!(
-                    f,
-                    "Error reading symbol type, unknown type with value {:x}",
-                    v
-                )
-            }
-            ReadError::KOSymbolConstantReadError(s) => {
-                write!(
-                    f,
-                    "Error reading symbol while parsing constant for {}, ran out of bytes.",
-                    s
-                )
-            }
-            ReadError::KOSValueTypeReadError(v) => {
-                write!(
-                    f,
-                    "Error reading kOS value, unknown type with value {:x}",
-                    v
-                )
-            }
-            ReadError::KOSValueReadError => {
-                write!(f, "Error reading kOS value, ran out of bytes.")
-            }
-            ReadError::SectionKindReadError => {
-                write!(f, "Error reading section kind, ran out of bytes.")
-            }
-            ReadError::UnknownSectionKindReadError(v) => {
-                write!(
-                    f,
-                    "Error reading section kind, unknown kind with value {:x}",
-                    v
-                )
-            }
-            ReadError::SectionHeaderConstantReadError(s) => {
-                write!(
-                    f,
-                    "Error reading section header while parsing constant {}, ran out of bytes.",
-                    s
-                )
-            }
-            ReadError::StringTableReadError => {
-                write!(f, "Error reading string table, ran out of bytes.")
-            }
-            ReadError::KOHeaderReadError(s) => {
-                write!(
-                    f,
-                    "Error reading kerbal object file header, while parsing constant {}, ran out of bytes.",
-                    s
-                )
-            }
-            ReadError::KSMHeaderReadError(s) => {
-                write!(f, "Error reading kerbal machine code file, while parsing constant {}, ran out of bytes.", s)
-            }
-            ReadError::VersionMismatchError(v) => {
-                write!(
-                    f,
-                    "Error reading KerbalObject file, unsupported KO file version: {}",
-                    v
-                )
-            }
-            ReadError::DebugSectionUnsupportedError => {
-                write!(
-                    f,
-                    "Error reading KerbalObject file, debug sections unsupported in this version."
-                )
-            }
-            &ReadError::MissingSectionError(s) => {
-                write!(
-                    f,
-                    "Error reading KerbalObject file, expected section: {}",
-                    s
-                )
-            }
-            ReadError::InvalidKOFileMagicError => {
-                write!(
-                    f,
-                    "Error reading KerbalObject file, input file does not appear to be a KO file"
-                )
-            }
-            ReadError::InvalidKSMFileMagicError => {
-                write!(f, "Error reading Kerbal Machine Code file, input file does not appear to be a KSM file")
-            }
-            ReadError::KSMDecompressionError(e) => {
-                write!(
-                    f,
-                    "Error while trying to decompress Kerbal Machine File: {}",
-                    e
-                )
-            }
-            ReadError::MissingArgumentSectionError => {
-                write!(f, "Error reading Kerbal Machine Code file, expected argument section, ran out of bytes.")
-            }
-            ReadError::ExpectedArgumentSectionError(v) => {
-                write!(f, "Error reading Kerbal Machine Code file, expected argument section, instead found {:x}", v)
-            }
-            ReadError::NumIndexBytesReadError => {
-                write!(f, "Error reading Kerbal Machine Code argument section num index bytes, ran out of bytes.")
-            }
-            ReadError::InvalidNumIndexBytesError(n) => {
-                write!(f, "Error reading Kerbal Machine Code argument section num index bytes, invalid number: {}, only values 1-4 permitted.", n)
-            }
-            ReadError::ArgumentSectionReadError => {
-                write!(f, "Error reading Kerbal Machine Code argument section, expected argument, ran out of bytes.")
-            }
-            ReadError::CodeTypeReadError => {
-                write!(f, "Error reading KSM section type, ran out of bytes")
-            }
-            ReadError::UnknownCodeTypeReadError(c) => {
-                write!(
-                    f,
-                    "Error reading KSM section type, unknown type with value: {}",
-                    c
-                )
-            }
-            ReadError::MissingCodeSectionError => {
-                write!(f, "Error reading code section, ran out of bytes")
-            }
-            ReadError::ExpectedCodeSectionError(b) => {
-                write!(
-                    f,
-                    "Error reading KSM file, expected code section, found {:?}",
-                    b
-                )
-            }
-            ReadError::ReldReadError => {
-                write!(f, "Error reading relocation data, ran out of bytes")
-            }
-            ReadError::CodeSectionReadError => {
-                write!(f, "Error reading code section, ran out of bytes")
-            }
-            ReadError::DebugRangeReadError => {
-                write!(f, "Error reading debug section, ran out of bytes")
-            }
-            ReadError::DebugEntryReadError => {
-                write!(f, "Error reading debug entry, ran out of bytes")
-            }
-            ReadError::MissingDebugSectionError => {
-                write!(f, "Error reading KSM file debug section, expected debug section, ran out of bytes")
-            }
-            ReadError::ExpectedDebugSectionError(b) => {
-                write!(
-                    f,
-                    "Error reading KSM file, expected debug section header, found {:?}",
-                    b
-                )
-            }
-            ReadError::DebugSectionReadError => {
-                write!(f, "Error reading KSM file debug section, ran out of bytes")
-            }
-        }
-    }
-}
-
-impl std::fmt::Display for ConstantReadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            &ConstantReadError::BoolReadError => {
-                write!(f, "boolean")
-            }
-            &ConstantReadError::U8ReadError => {
-                write!(f, "unsigned byte")
-            }
-            &ConstantReadError::I8ReadError => {
-                write!(f, "signed byte")
-            }
-            &ConstantReadError::U16ReadError => {
-                write!(f, "unsigned 16-bit integer")
-            }
-            &ConstantReadError::I16ReadError => {
-                write!(f, "signed 16-bit integer")
-            }
-            &ConstantReadError::U32ReadError => {
-                write!(f, "unsigned 32-bit integer")
-            }
-            &ConstantReadError::I32ReadError => {
-                write!(f, "signed 32-bit integer")
-            }
-            &ConstantReadError::F32ReadError => {
-                write!(f, "float")
-            }
-            &ConstantReadError::F64ReadError => {
-                write!(f, "double float")
-            }
-            &ConstantReadError::StringReadError => {
-                write!(f, "string")
-            }
-        }
-    }
 }

@@ -1,23 +1,25 @@
-use crate::FromBytes;
-use crate::ToBytes;
-use crate::{
-    errors::{ReadError, ReadResult},
-    ksmfile::sections::CodeSection,
-};
-use flate2::write::GzEncoder;
-use flate2::{read::GzDecoder, Compression};
 use std::{
     io::{Read, Write},
     iter::Peekable,
     slice::Iter,
 };
 
-use self::sections::{ArgumentSection, DebugSection};
+use flate2::write::GzEncoder;
+use flate2::{read::GzDecoder, Compression};
 
+use crate::FromBytes;
+use crate::ToBytes;
+use crate::{
+    errors::{ReadError, ReadResult},
+    ksmfile::sections::CodeSection,
+};
+
+pub mod errors;
 pub mod sections;
 
-pub mod instructions;
+use sections::{ArgumentSection, DebugSection};
 
+pub mod instructions;
 pub use instructions::Instr;
 
 const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
@@ -94,7 +96,7 @@ impl ToBytes for KSMFile {
 }
 
 impl FromBytes for KSMFile {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -109,14 +111,14 @@ impl FromBytes for KSMFile {
 
         let mut decompressed_source = decompressed.iter().peekable();
 
-        let header = KSMHeader::from_bytes(&mut decompressed_source, debug)?;
+        let header = KSMHeader::from_bytes(&mut decompressed_source)?;
 
-        let arg_section = ArgumentSection::from_bytes(&mut decompressed_source, debug)?;
+        let arg_section = ArgumentSection::from_bytes(&mut decompressed_source)?;
 
         let mut code_sections = Vec::new();
 
         loop {
-            let delimiter = u8::from_bytes(&mut decompressed_source, debug)
+            let delimiter = u8::from_bytes(&mut decompressed_source)
                 .map_err(|_| ReadError::MissingCodeSectionError)?;
 
             if delimiter != b'%' {
@@ -130,7 +132,6 @@ impl FromBytes for KSMFile {
 
                 let code_section = CodeSection::from_bytes(
                     &mut decompressed_source,
-                    debug,
                     arg_section.num_index_bytes(),
                 )?;
 
@@ -140,7 +141,7 @@ impl FromBytes for KSMFile {
             }
         }
 
-        let debug_section = DebugSection::from_bytes(&mut decompressed_source, debug)?;
+        let debug_section = DebugSection::from_bytes(&mut decompressed_source)?;
 
         let ksm = KSMFile {
             header,
@@ -172,11 +173,11 @@ impl ToBytes for KSMHeader {
 }
 
 impl FromBytes for KSMHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let magic = u32::from_bytes(source, debug)
+        let magic = u32::from_bytes(source)
             .map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
 
         if magic != KSM_MAGIC_NUMBER {

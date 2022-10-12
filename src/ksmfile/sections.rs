@@ -80,16 +80,17 @@ impl ToBytes for ArgumentSection {
 }
 
 impl FromBytes for ArgumentSection {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("Reading ArgumentSection");
         }
 
         let header =
-            u16::from_bytes(source, debug).map_err(|_| ReadError::MissingArgumentSectionError)?;
+            u16::from_bytes(source).map_err(|_| ReadError::MissingArgumentSectionError)?;
 
         // %A in hex, little-endian
         if header != 0x4125 {
@@ -97,13 +98,14 @@ impl FromBytes for ArgumentSection {
         }
 
         let num_index_bytes =
-            u8::from_bytes(source, debug).map_err(|_| ReadError::NumIndexBytesReadError)? as usize;
+            u8::from_bytes(source).map_err(|_| ReadError::NumIndexBytesReadError)? as usize;
 
         if num_index_bytes < 1 || num_index_bytes > 4 {
             return Err(ReadError::InvalidNumIndexBytesError(num_index_bytes));
         }
 
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("\tNumber of index bytes: {}", num_index_bytes);
         }
 
@@ -119,9 +121,10 @@ impl FromBytes for ArgumentSection {
                 if **next == b'%' {
                     break;
                 } else {
-                    let argument = KOSValue::from_bytes(source, debug)?;
+                    let argument = KOSValue::from_bytes(source)?;
 
-                    if debug {
+                    #[cfg(feature = "print_debug")]
+                    {
                         println!("\tRead argument: {:?}", argument);
                     }
 
@@ -173,7 +176,7 @@ impl ToBytes for CodeType {
 }
 
 impl FromBytes for CodeType {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, _debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -224,16 +227,17 @@ impl CodeSection {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         num_index_bytes: usize,
     ) -> ReadResult<Self> {
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             print!("Reading code section, ");
         }
 
-        let section_type = CodeType::from_bytes(source, debug)?;
+        let section_type = CodeType::from_bytes(source)?;
 
-        if debug {
+        #[cfg(feature = "print_debug")]
+        {
             println!("{:?}", section_type);
         }
 
@@ -245,9 +249,10 @@ impl CodeSection {
                     break;
                 }
 
-                let instr = Instr::from_bytes(source, debug, num_index_bytes)?;
+                let instr = Instr::from_bytes(source, num_index_bytes)?;
 
-                if debug {
+                #[cfg(feature = "print_debug")]
+                {
                     println!("\tRead instruction {:?}", instr);
                 }
 
@@ -313,42 +318,40 @@ impl DebugRange {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         range_size: usize,
     ) -> ReadResult<Self> {
-        let start = DebugRange::read_variable(source, debug, range_size)?;
-        let end = DebugRange::read_variable(source, debug, range_size)?;
+        let start = DebugRange::read_variable(source, range_size)?;
+        let end = DebugRange::read_variable(source, range_size)?;
 
         Ok(DebugRange { start, end })
     }
 
     fn read_variable(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         range_size: usize,
     ) -> ReadResult<usize> {
         Ok(match range_size {
             1 => {
-                (u8::from_bytes(source, debug).map_err(|_| ReadError::DebugRangeReadError))?
+                (u8::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))?
                     as usize
             }
             2 => {
-                (u16::from_bytes(source, debug).map_err(|_| ReadError::DebugRangeReadError))?
+                (u16::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))?
                     as usize
             }
             3 => {
-                let mut upper = u8::from_bytes(source, debug)
+                let mut upper = u8::from_bytes(source)
                     .map_err(|_| ReadError::DebugRangeReadError)?
                     as u32;
                 upper = upper << 24;
-                let lower = u16::from_bytes(source, debug)
+                let lower = u16::from_bytes(source)
                     .map_err(|_| ReadError::DebugRangeReadError)?
                     as u32;
 
                 (upper | lower) as usize
             }
             4 => {
-                (u32::from_bytes(source, debug).map_err(|_| ReadError::DebugRangeReadError))?
+                (u32::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))?
                     as usize
             }
             _ => unreachable!(),
@@ -404,17 +407,16 @@ impl DebugEntry {
 
     pub fn from_bytes(
         source: &mut Peekable<Iter<u8>>,
-        debug: bool,
         range_size: usize,
     ) -> ReadResult<Self> {
         let line_number =
-            i16::from_bytes(source, debug).map_err(|_| ReadError::DebugEntryReadError)? as isize;
+            i16::from_bytes(source).map_err(|_| ReadError::DebugEntryReadError)? as isize;
         let number_ranges =
-            u8::from_bytes(source, debug).map_err(|_| ReadError::DebugEntryReadError)? as usize;
+            u8::from_bytes(source).map_err(|_| ReadError::DebugEntryReadError)? as usize;
         let mut ranges = Vec::new();
 
         for _ in 0..number_ranges {
-            let range = DebugRange::from_bytes(source, debug, range_size)?;
+            let range = DebugRange::from_bytes(source, range_size)?;
 
             ranges.push(range);
         }
@@ -472,7 +474,7 @@ impl ToBytes for DebugSection {
 }
 
 impl FromBytes for DebugSection {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self>
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -480,13 +482,13 @@ impl FromBytes for DebugSection {
             if *next != b'D' {
                 Err(ReadError::ExpectedDebugSectionError(*next))
             } else {
-                let range_size = u8::from_bytes(source, debug)
+                let range_size = u8::from_bytes(source)
                     .map_err(|_| ReadError::DebugSectionReadError)?
                     as usize;
                 let mut debug_entries = Vec::new();
 
                 while let Some(_) = source.peek() {
-                    let debug_entry = DebugEntry::from_bytes(source, debug, range_size)?;
+                    let debug_entry = DebugEntry::from_bytes(source, range_size)?;
 
                     debug_entries.push(debug_entry);
                 }

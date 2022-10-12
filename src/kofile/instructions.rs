@@ -48,22 +48,23 @@ impl ToBytes for Instr {
     }
 }
 
+// TODO: Docs and rewrite
 impl FromBytes for Instr {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>, debug: bool) -> ReadResult<Self> {
-        let opcode = Opcode::from_bytes(source, debug)?;
+    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
+        let opcode = Opcode::from_bytes(source)?;
 
         Ok(match opcode.num_operands() {
             0 => Instr::ZeroOp(opcode),
             1 => {
                 let op1 =
-                    u32::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)?;
+                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
                 Instr::OneOp(opcode, op1 as usize)
             }
             _ => {
                 let op1 =
-                    u32::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)?;
+                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
                 let op2 =
-                    u32::from_bytes(source, debug).map_err(|_| ReadError::OperandReadError)?;
+                    u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
                 Instr::TwoOp(opcode, op1 as usize, op2 as usize)
             }
         })
