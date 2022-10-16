@@ -1,22 +1,98 @@
 use std::io::{Read, Write};
+use std::path::PathBuf;
 
 use kerbalobjects::{
-    ksmfile::{
+    ksm::{
         sections::{CodeSection, CodeType, DebugEntry, DebugRange},
         Instr, KSMFile,
     },
-    FromBytes, KOSValue, Opcode, ToBytes,
+    FileIterator, FromBytes, KOSValue, Opcode, ToBytes,
 };
+
+/// This test is simply a large file that kerbalobjects should be able to read
+/// correctly. It doesn't yet test the 3 byte argument index size, but it is somewhat
+/// a stress test. It is provided by the [kosos repository](https://gitlab.com/thexa4/kosos),
+/// which is a collection of kOS scripts making up "kOS operating system" and a self-hosting compiler.
+#[test]
+fn read_kosos_kash() {
+    let mut buffer = Vec::with_capacity(2048);
+    let file_path = PathBuf::from("tests").join("kash.ksm");
+    let mut file = std::fs::File::open(file_path).expect("Error opening KSM file");
+
+    file.read_to_end(&mut buffer)
+        .expect("Error reading kash.ksm");
+
+    let mut buffer_iter = FileIterator::new(&buffer);
+
+    let expected_args = vec![
+        KOSValue::String("@0001".into()),
+        KOSValue::Int16(1),
+        KOSValue::Int16(0),
+        KOSValue::StringValue("kpp 1.1".into()),
+        KOSValue::StringValue("https://gitlab.com/thexa4/kos-kpp".into()),
+        KOSValue::String("$class".into()),
+        KOSValue::String("__new".into()),
+        KOSValue::ArgMarker,
+        KOSValue::String("@0481".into()),
+        KOSValue::Int16(2),
+        KOSValue::String("$r".into()),
+        KOSValue::String("@0063".into()),
+        KOSValue::Int16(3),
+    ];
+
+    let ksm = KSMFile::from_bytes(&mut buffer_iter).expect("Error reading KSM file");
+
+    let mut arg_section_args = ksm.arg_section.arguments();
+
+    for arg in expected_args {
+        assert_eq!(&arg, arg_section_args.next().unwrap());
+    }
+
+    let mut code_sections = ksm.code_sections();
+
+    code_sections.next().unwrap();
+    code_sections.next().unwrap();
+
+    let main_code = code_sections.next().unwrap();
+
+    assert!(code_sections.next().is_none());
+
+    let expected_instrs = vec![
+        Opcode::Lbrt,
+        Opcode::Bscp,
+        Opcode::Argb,
+        Opcode::Push,
+        Opcode::Pop,
+        Opcode::Push,
+        Opcode::Pop,
+        Opcode::Push,
+        Opcode::Gmet,
+        Opcode::Push,
+        Opcode::Push,
+        Opcode::Jmp,
+        Opcode::Bscp,
+        Opcode::Stol,
+        Opcode::Argb,
+        Opcode::Push,
+    ];
+
+    let mut instructions = main_code.instructions();
+
+    for opcode in expected_instrs {
+        assert_eq!(opcode, instructions.next().unwrap().opcode());
+    }
+}
 
 #[test]
 fn read_kos_ksm() {
     let mut buffer = Vec::with_capacity(2048);
-    let mut file = std::fs::File::open("example.ksm").expect("Error opening KSM file");
+    let file_path = PathBuf::from("tests").join("example.ksm");
+    let mut file = std::fs::File::open(file_path).expect("Error opening KSM file");
 
     file.read_to_end(&mut buffer)
         .expect("Error reading example.ksm");
 
-    let mut buffer_iter = buffer.iter().peekable();
+    let mut buffer_iter = FileIterator::new(&buffer);
 
     let _ksm = KSMFile::from_bytes(&mut buffer_iter).expect("Error reading KSM file");
 }
@@ -44,7 +120,7 @@ fn write_ksm() {
 
     let zero = KOSValue::Int16(0);
 
-    let arg_section = ksm.arg_section_mut();
+    let arg_section = &mut ksm.arg_section;
 
     let print_index = arg_section.add(print);
     let empty_index = arg_section.add(empty);
@@ -86,13 +162,14 @@ fn write_ksm() {
     let mut debug_entry = DebugEntry::new(1);
     debug_entry.add(DebugRange::new(6, 0x18));
 
-    ksm.debug_section_mut().add(debug_entry);
+    ksm.debug_section.add(debug_entry);
 
     let mut file_buffer = Vec::with_capacity(2048);
 
     ksm.to_bytes(&mut file_buffer);
 
-    let mut file = std::fs::File::create("test.ksm").expect("Error opening test.ksm");
+    let file_path = PathBuf::from("tests").join("test.ksm");
+    let mut file = std::fs::File::create(file_path).expect("Error opening test.ksm");
 
     file.write_all(file_buffer.as_slice())
         .expect("test.ksm could not be written to.");
@@ -100,12 +177,13 @@ fn write_ksm() {
 
 fn read_ksm() {
     let mut buffer = Vec::with_capacity(2048);
-    let mut file = std::fs::File::open("test.ksm").expect("Error opening test.ksm");
+    let file_path = PathBuf::from("tests").join("test.ksm");
+    let mut file = std::fs::File::open(file_path).expect("Error opening test.ksm");
 
     file.read_to_end(&mut buffer)
         .expect("Error reading test.ksm");
 
-    let mut buffer_iter = buffer.iter().peekable();
+    let mut buffer_iter = FileIterator::new(&buffer);
 
     let _ksm = KSMFile::from_bytes(&mut buffer_iter);
 }

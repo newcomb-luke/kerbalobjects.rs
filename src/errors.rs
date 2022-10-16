@@ -1,9 +1,13 @@
+//! Errors for reading KSM or KO files
 use thiserror::Error;
 
-pub use crate::ksmfile::errors::*;
+pub use crate::ksm::errors::*;
 
+/// The result of attempting to read an object file, KO or KSM. The error type is a ReadError
 pub type ReadResult<T> = Result<T, ReadError>;
 
+#[allow(missing_docs)]
+/// An error type which encompasses reading KSM and KO files.
 #[derive(Debug, Error)]
 pub enum ReadError {
     #[error("Error reading Kerbal Machine Code file")]
@@ -71,7 +75,7 @@ pub enum ReadError {
     #[error("Error reading Kerbal Machine Code file argument section num index bytes, ran out of bytes.")]
     NumIndexBytesReadError,
     #[error("Error reading Kerbal Machine Code file argument section num index bytes, invalid number: {0}")]
-    InvalidNumIndexBytesError(usize),
+    InvalidNumIndexBytesError(u8),
     #[error("Error reading Kerbal Machine Code file argument section, expected argument, ran out of bytes.")]
     ArgumentSectionReadError,
     #[error("Error reading KSM section type, ran out of bytes.")]
@@ -98,6 +102,8 @@ pub enum ReadError {
     DebugSectionReadError,
 }
 
+#[allow(missing_docs)]
+/// An error for simply reading a KOSvalue
 #[derive(Debug, Error)]
 pub enum KOSValueReadError {
     #[error("boolean")]

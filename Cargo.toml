@@ -9,7 +9,10 @@ readme = "README.md"
 homepage = "https://github.com/newcomb-luke/kerbalobjects.rs"
 
 [features]
+default = ["ksm", "ko"]
 print_debug = []
+ksm = []
+ko = []
 
 [dependencies]
 flate2 = "1.0"

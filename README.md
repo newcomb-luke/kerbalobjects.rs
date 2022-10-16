@@ -9,6 +9,8 @@
 [<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/kerbalobjects.rs?style=for-the-badge" height="20">]()
 [<img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/kerbalobjects?style=for-the-badge" height="20">]()
 
+A Rust crate that allows anyone to read or write a Kerbal Machine Code file or Kerbal Object file.
+
 ```toml
 [dependencies]
 kerbalobjects = "4.0"

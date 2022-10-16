@@ -1,43 +1,37 @@
-pub mod sections;
+//! The module for describing, reading, and writing Kerbal Object files
 
-pub mod symbols;
-
-pub mod instructions;
-
-pub mod errors;
-
-use std::iter::Peekable;
 use std::slice::Iter;
 
-use crate::FromBytes;
-
 use crate::errors::{ReadError, ReadResult};
+use crate::{FileIterator, FromBytes, ToBytes};
 
+use self::sections::{DataSection, FuncSection, SectionHeader, StringTable, SymbolTable};
 use self::sections::{ReldSection, SectionIndex, SectionKind};
-use self::{
-    errors::{UpdateError, UpdateResult},
-    sections::{DataSection, FuncSection, SectionHeader, StringTable, SymbolTable},
-};
 
-use super::ToBytes;
+pub mod errors;
+pub mod instructions;
+pub mod sections;
+pub mod symbols;
 
+use crate::ko::errors::{FinalizeError, FinalizeResult};
 pub use instructions::Instr;
 
 const FILE_VERSION: u8 = 4;
 const MAGIC_NUMBER: u32 = 0x666f016b;
 
+/// Implemented by Kerbal Object sections to read them from a file iterator, with the
+/// size and section index known
 pub trait SectionFromBytes {
-    fn from_bytes(
-        source: &mut Peekable<Iter<u8>>,
-        size: usize,
-        section_index: usize,
-    ) -> ReadResult<Self>
+    /// Reads a Kerbal Object file section from a file iterator using the pre-known
+    /// size and section header index
+    fn from_bytes(source: &mut FileIterator, size: usize, section_index: usize) -> ReadResult<Self>
     where
         Self: Sized;
 }
 
 macro_rules! gen_get_by_name {
-    ($func_name: ident, $mut_func_name: ident, $section_name: ident, $section_type: ty) => {
+    ($(#[$ref_attr:meta])* => $func_name: ident, $(#[$mut_attr:meta])* => $mut_func_name: ident, $section_name: ident, $section_type: ty) => {
+        $(#[$ref_attr])*
         pub fn $func_name(&self, name: &str) -> Option<&$section_type> {
             self.$section_name.iter().find(|section| {
                 match self.sh_name_from_index(section.section_index()) {
@@ -47,6 +41,7 @@ macro_rules! gen_get_by_name {
             })
         }
 
+        $(#[$mut_attr])*
         pub fn $mut_func_name(&mut self, name: &str) -> Option<&mut $section_type> {
             let mut index_opt = Some(0);
 
@@ -69,8 +64,23 @@ macro_rules! gen_get_by_name {
     };
 }
 
+macro_rules! gen_new_section {
+    ($(#[$attr:meta])* => $func_name: ident, $section_type: ty, $section_kind: expr) => {
+        $(#[$attr])*
+        pub fn $func_name(&mut self, name: &str) -> $section_type {
+            let sh_index = self.new_sh(name, $section_kind);
+            <$section_type>::with_capacity(4, sh_index)
+        }
+    };
+}
+
+/// An in-memory representation of a KO file
+///
+/// Can be modified, written, or read.
+#[derive(Debug)]
 pub struct KOFile {
-    header: KOHeader,
+    /// The Kerbal Object file header
+    pub header: KOHeader,
     sh_strtab: StringTable,
     section_headers: Vec<SectionHeader>,
     str_tabs: Vec<StringTable>,
@@ -81,10 +91,15 @@ pub struct KOFile {
 }
 
 impl KOFile {
+    /// Creates a new, empty, Kerbal Object file.
+    ///
+    /// Creates a new section header table, initialized with a first element that is a Null section,
+    /// and a string table that is the section header string table.
+    ///
     pub fn new() -> Self {
         let mut kofile = KOFile {
             header: KOHeader::new(2, 2),
-            sh_strtab: StringTable::new(256, 1),
+            sh_strtab: StringTable::with_capacity(256, 1),
             section_headers: Vec::with_capacity(4),
             str_tabs: Vec::with_capacity(2),
             sym_tabs: Vec::with_capacity(1),
@@ -102,107 +117,108 @@ impl KOFile {
         kofile
     }
 
+    /// Adds a new string to the section header string table
     pub fn add_shstr(&mut self, name: &str) -> usize {
         self.sh_strtab.add(name)
     }
 
+    /// Gets a section name from the section header string table at the specified index, or
+    /// None if none exists at that index
     pub fn get_shstr(&self, index: usize) -> Option<&String> {
         self.sh_strtab.get(index)
     }
 
+    /// Adds a new section header to the section header table, and returns the index of the
+    /// section header
     pub fn add_header(&mut self, header: SectionHeader) -> usize {
         let index = self.section_headers.len();
         self.section_headers.push(header);
         index
     }
 
+    /// Gets the section header at the provided index into the section header table,
+    /// or None if none exists at that index
     pub fn get_header(&self, index: usize) -> Option<&SectionHeader> {
         self.section_headers.get(index)
     }
 
+    /// Gets the name of the section referred to by the provided section header,
+    /// or None if no section with that header is found in this KO file
     pub fn get_header_name(&self, header: &SectionHeader) -> Option<&String> {
-        self.sh_strtab.get(header.name_idx())
+        self.sh_strtab.get(header.name_idx)
     }
 
+    /// Returns the name of the section referred to by the index into the
+    /// Kerbal Object file's section header table, or None if a section header
+    /// at that index doesn't exist
     pub fn sh_name_from_index(&self, index: usize) -> Option<&String> {
         let header = self.section_headers.get(index)?;
-        self.sh_strtab.get(header.name_idx())
+        self.sh_strtab.get(header.name_idx)
     }
 
+    /// Adds a new string table to this Kerbal Object file
     pub fn add_str_tab(&mut self, str_tab: StringTable) {
         self.str_tabs.push(str_tab);
     }
 
+    /// Adds a new symbol table to this Kerbal Object file
     pub fn add_sym_tab(&mut self, sym_tab: SymbolTable) {
         self.sym_tabs.push(sym_tab);
     }
 
+    /// Adds a new data section to this Kerbal Object file
     pub fn add_data_section(&mut self, data_section: DataSection) {
         self.data_sections.push(data_section);
     }
 
+    /// Adds a new function section to this Kerbal Object file
     pub fn add_func_section(&mut self, func_section: FuncSection) {
         self.func_sections.push(func_section);
     }
 
+    /// Adds a new relocation data section to this Kerbal Object file
     pub fn add_reld_section(&mut self, reld_section: ReldSection) {
         self.reld_sections.push(reld_section);
     }
 
+    /// Returns an iterator over all of the string tables in this Kerbal Object file
     pub fn str_tabs(&self) -> Iter<StringTable> {
         self.str_tabs.iter()
     }
 
+    /// Returns an iterator over all of the symbol tables in this Kerbal Object file
     pub fn sym_tabs(&self) -> Iter<SymbolTable> {
         self.sym_tabs.iter()
     }
 
+    /// Returns an iterator over all of the data sections in this Kerbal Object file
     pub fn data_sections(&self) -> Iter<DataSection> {
         self.data_sections.iter()
     }
 
+    /// Returns an iterator over all of the function sections in this Kerbal Object file
     pub fn func_sections(&self) -> Iter<FuncSection> {
         self.func_sections.iter()
     }
 
+    /// Returns an iterator over all of the relocation data sections in this Kerbal Object file
     pub fn reld_sections(&self) -> Iter<ReldSection> {
         self.reld_sections.iter()
     }
 
+    /// Adds a new section header of the provided name and section kind to this Kerbal
+    /// Object file, and returns the index into the section header table of this new header
     pub fn new_sh(&mut self, name: &str, kind: SectionKind) -> usize {
         let name_idx = self.add_shstr(name);
         let header = SectionHeader::new(name_idx, kind);
         self.add_header(header)
     }
 
-    pub fn new_strtab(&mut self, name: &str) -> StringTable {
-        let sh_index = self.new_sh(name, SectionKind::StrTab);
-        StringTable::new(4, sh_index)
-    }
-
-    pub fn new_symtab(&mut self, name: &str) -> SymbolTable {
-        let sh_index = self.new_sh(name, SectionKind::SymTab);
-        SymbolTable::new(4, sh_index)
-    }
-
-    pub fn new_datasection(&mut self, name: &str) -> DataSection {
-        let sh_index = self.new_sh(name, SectionKind::Data);
-        DataSection::new(4, sh_index)
-    }
-
-    pub fn new_funcsection(&mut self, name: &str) -> FuncSection {
-        let sh_index = self.new_sh(name, SectionKind::Func);
-        FuncSection::new(4, sh_index)
-    }
-
-    pub fn new_reldsection(&mut self, name: &str) -> ReldSection {
-        let sh_index = self.new_sh(name, SectionKind::Reld);
-        ReldSection::new(4, sh_index)
-    }
-
+    /// Returns the index into the section header table of the section with the provided name,
+    /// or None if there is no such section
     pub fn sh_index_by_name(&self, name: &str) -> Option<usize> {
         for (index, header) in self.section_headers.iter().enumerate() {
-            let name_idx = header.name_idx();
+            let name_idx = header.name_idx;
             let sh_name = match self.sh_strtab.get(name_idx) {
                 Some(name) => name,
                 None => {
@@ -218,43 +234,136 @@ impl KOFile {
         None
     }
 
-    gen_get_by_name!(str_tab_by_name, str_tab_by_name_mut, str_tabs, StringTable);
+    gen_new_section! {
+        /// Creates a new StringTable, and adds a new entry for it in the section
+        /// header table with the provided name.
+        ///
+        /// Returns the new StringTable
+        =>
+        new_strtab,
+        StringTable,
+        SectionKind::StrTab
+    }
 
-    gen_get_by_name!(sym_tab_by_name, sym_tab_by_name_mut, sym_tabs, SymbolTable);
+    gen_new_section! {
+        /// Creates a new SymbolTable, and adds a new entry for it in the section
+        /// header table with the provided name.
+        ///
+        /// Returns the new SymbolTable
+        =>
+        new_symtab,
+        SymbolTable,
+        SectionKind::SymTab
+    }
 
-    gen_get_by_name!(
+    gen_new_section! {
+        /// Creates a new DataSection, and adds a new entry for it in the section
+        /// header table with the provided name.
+        ///
+        /// Returns the new DataSection
+        =>
+        new_data_section,
+        DataSection,
+        SectionKind::Data
+    }
+
+    gen_new_section! {
+        /// Creates a new FuncSection, and adds a new entry for it in the section
+        /// header table with the provided name.
+        ///
+        /// Returns the new FuncSection
+        =>
+        new_func_section,
+        FuncSection,
+        SectionKind::Func
+    }
+
+    gen_new_section! {
+        /// Creates a new ReldSection, and adds a new entry for it in the section
+        /// header table with the provided name.
+        ///
+        /// Returns the new ReldSection
+        =>
+        new_reld_section,
+        ReldSection,
+        SectionKind::Reld
+    }
+
+    gen_get_by_name! {
+    /// Gets a reference to the StringTable with the provided name,
+    /// or None if a StringTable by that name doesn't exist
+    =>
+    str_tab_by_name,
+    /// Gets a mutable reference to the StringTable with the provided name,
+    /// or None if a StringTable by that name doesn't exist
+    =>
+    str_tab_by_name_mut, str_tabs, StringTable}
+
+    gen_get_by_name! {
+        /// Gets a reference to the SymbolTable with the provided name,
+        /// or None if a SymbolTable by that name doesn't exist
+        =>
+        sym_tab_by_name,
+        /// Gets a mutable reference to the SymbolTable with the provided name,
+        /// or None if a SymbolTable by that name doesn't exist
+        =>
+        sym_tab_by_name_mut,
+        sym_tabs,
+        SymbolTable
+    }
+
+    gen_get_by_name! {
+        /// Gets a reference to the DataSection with the provided name,
+        /// or None if a DataSection by that name doesn't exist
+        =>
         data_section_by_name,
+        /// Gets a mutable reference to the DataSection with the provided name,
+        /// or None if a DataSection by that name doesn't exist
+        =>
         data_section_by_name_mut,
         data_sections,
         DataSection
-    );
+    }
 
-    gen_get_by_name!(
+    gen_get_by_name! {
+        /// Gets a reference to the FuncSection with the provided name,
+        /// or None if a FuncSection by that name doesn't exist
+        =>
         func_section_by_name,
+        /// Gets a mutable reference to the FuncSection with the provided name,
+        /// or None if a FuncSection by that name doesn't exist
+        =>
         func_section_by_name_mut,
         func_sections,
         FuncSection
-    );
+    }
 
     gen_get_by_name!(
+        /// Gets a reference to the ReldSection with the provided name,
+        /// or None if a ReldSection by that name doesn't exist
+        =>
         reld_section_by_name,
+        /// Gets a mutable reference to the ReldSection with the provided name,
+        /// or None if a ReldSection by that name doesn't exist
+        =>
         reld_section_by_name_mut,
         reld_sections,
         ReldSection
     );
 
+    /// Returns an iterator over all section headers in the Kerbal Object file's section
+    /// header table
     pub fn section_headers(&self) -> Iter<SectionHeader> {
         self.section_headers.iter()
     }
 
+    /// Returns the number of sections registered in the section header table. This will always
+    /// be at least 1, because of the Null section present in all valid section header tables.
     pub fn section_count(&self) -> usize {
         self.section_headers.len()
     }
 
-    pub fn version(&self) -> u8 {
-        self.header.version
-    }
-
+    /// The index into the section header table of the section header string table
     pub fn sh_strtab_index(&self) -> usize {
         self.sh_strtab.section_index()
     }
@@ -264,13 +373,13 @@ impl KOFile {
         section_name: &'static str,
         section_index: usize,
         section_size: u32,
-    ) -> UpdateResult {
+    ) -> Result<(), FinalizeError> {
         match self.section_headers.get_mut(section_index) {
             Some(header) => {
-                header.set_size(section_size);
+                header.size = section_size;
             }
             None => {
-                return Err(UpdateError::InvalidSectionIndexError(
+                return Err(FinalizeError::InvalidSectionIndexError(
                     section_name,
                     section_index,
                 ));
@@ -280,11 +389,8 @@ impl KOFile {
         Ok(())
     }
 
-    fn update_section_headers(&mut self) -> UpdateResult {
-        self.section_headers
-            .get_mut(1)
-            .unwrap()
-            .set_size(self.sh_strtab.size());
+    fn update_section_headers(&mut self) -> Result<(), FinalizeError> {
+        self.section_headers.get_mut(1).unwrap().size = self.sh_strtab.size();
 
         for i in 0..self.str_tabs.len() {
             let str_tab = self.str_tabs.get(i).unwrap();
@@ -329,7 +435,9 @@ impl KOFile {
         Ok(())
     }
 
-    pub fn update_headers(&mut self) -> UpdateResult {
+    /// Verifies that a Kerbal Object file's section header data is sound so that it
+    /// can be written out as a proper KerbalObject file
+    pub fn finalize(mut self) -> FinalizeResult {
         self.header = KOHeader::new(
             self.section_headers.len() as u16,
             self.sh_strtab.section_index() as u16,
@@ -337,7 +445,7 @@ impl KOFile {
 
         self.update_section_headers()?;
 
-        Ok(())
+        Ok(WritableKOFile(self))
     }
 }
 
@@ -347,48 +455,61 @@ impl Default for KOFile {
     }
 }
 
-impl ToBytes for KOFile {
+/// A finalized Kerbal Object file that can be written to a byte buffer, or converted
+/// into a KOFile
+#[derive(Debug)]
+pub struct WritableKOFile(KOFile);
+
+impl From<WritableKOFile> for KOFile {
+    fn from(w_kofile: WritableKOFile) -> Self {
+        w_kofile.0
+    }
+}
+
+impl ToBytes for WritableKOFile {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
-        self.header.to_bytes(buf);
+        let ko = &self.0;
+
+        ko.header.to_bytes(buf);
 
         // Arbitrary "large number"
         let mut section_buffer: Vec<u8> = Vec::with_capacity(2048);
 
-        for i in 0..self.section_headers.len() {
-            self.section_headers.get(i).unwrap().to_bytes(buf);
+        for i in 0..ko.section_headers.len() {
+            ko.section_headers.get(i).unwrap().to_bytes(buf);
 
             if i == 1 {
-                self.sh_strtab.to_bytes(&mut section_buffer);
+                ko.sh_strtab.to_bytes(&mut section_buffer);
             } else if i != 0 {
-                for str_tab in self.str_tabs.iter() {
+                for str_tab in ko.str_tabs.iter() {
                     if str_tab.section_index() == i {
                         str_tab.to_bytes(&mut section_buffer);
                         continue;
                     }
                 }
 
-                for sym_tab in self.sym_tabs.iter() {
+                for sym_tab in ko.sym_tabs.iter() {
                     if sym_tab.section_index() == i {
                         sym_tab.to_bytes(&mut section_buffer);
                         continue;
                     }
                 }
 
-                for data_section in self.data_sections.iter() {
+                for data_section in ko.data_sections.iter() {
                     if data_section.section_index() == i {
                         data_section.to_bytes(&mut section_buffer);
                         continue;
                     }
                 }
 
-                for func_section in self.func_sections.iter() {
+                for func_section in ko.func_sections.iter() {
                     if func_section.section_index() == i {
                         func_section.to_bytes(&mut section_buffer);
                         continue;
                     }
                 }
 
-                for reld_section in self.reld_sections.iter() {
+                for reld_section in ko.reld_sections.iter() {
                     if reld_section.section_index() == i {
                         reld_section.to_bytes(&mut section_buffer);
                         continue;
@@ -402,12 +523,12 @@ impl ToBytes for KOFile {
 }
 
 impl FromBytes for KOFile {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {
         let header = KOHeader::from_bytes(source)?;
-        let mut section_headers = Vec::with_capacity(header.num_headers() as usize);
+        let mut section_headers = Vec::with_capacity(header.num_headers as usize);
         let mut str_tabs;
         let mut sym_tabs;
         let mut data_sections;
@@ -422,34 +543,30 @@ impl FromBytes for KOFile {
         for _ in 0..header.num_headers {
             let header = SectionHeader::from_bytes(source)?;
 
-            match header.kind() {
-                sections::SectionKind::StrTab => {
+            match header.section_kind {
+                SectionKind::StrTab => {
                     num_str_tabs += 1;
                 }
-                sections::SectionKind::SymTab => {
+                SectionKind::SymTab => {
                     num_sym_tabs += 1;
                 }
-                sections::SectionKind::Data => {
+                SectionKind::Data => {
                     num_data_sections += 1;
                 }
-                sections::SectionKind::Func => {
+                SectionKind::Func => {
                     num_func_sections += 1;
                 }
-                sections::SectionKind::Reld => {
+                SectionKind::Reld => {
                     num_reld_sections += 1;
                 }
-                sections::SectionKind::Null
-                | sections::SectionKind::Unknown
-                | sections::SectionKind::Debug => {}
+                SectionKind::Null | SectionKind::Debug => {}
             }
 
             #[cfg(feature = "print_debug")]
             {
                 println!(
                     "Section header: Name index: {}, kind: {:?}, size: {}",
-                    header.name_idx(),
-                    header.kind(),
-                    header.size()
+                    header.name_idx, header.section_kind, header.size
                 );
             }
 
@@ -466,40 +583,39 @@ impl FromBytes for KOFile {
         let strtab_size = section_headers
             .get(1)
             .ok_or(ReadError::MissingSectionError(".shstrtab"))?
-            .size() as usize;
+            .size as usize;
 
         let sh_strtab = StringTable::from_bytes(source, strtab_size, 1)?;
 
         for i in 2..section_headers.len() {
             let header = section_headers.get(i).unwrap();
-            let size = header.size() as usize;
+            let size = header.size as usize;
 
-            match header.kind() {
-                sections::SectionKind::Null => {}
-                sections::SectionKind::StrTab => {
+            match header.section_kind {
+                SectionKind::Null => {}
+                SectionKind::StrTab => {
                     let str_tab = StringTable::from_bytes(source, size, i)?;
                     str_tabs.push(str_tab);
                 }
-                sections::SectionKind::SymTab => {
+                SectionKind::SymTab => {
                     let sym_tab = SymbolTable::from_bytes(source, size, i)?;
                     sym_tabs.push(sym_tab);
                 }
-                sections::SectionKind::Data => {
+                SectionKind::Data => {
                     let data_section = DataSection::from_bytes(source, size, i)?;
                     data_sections.push(data_section);
                 }
-                sections::SectionKind::Func => {
+                SectionKind::Func => {
                     let func_section = FuncSection::from_bytes(source, size, i)?;
                     func_sections.push(func_section);
                 }
-                sections::SectionKind::Reld => {
+                SectionKind::Reld => {
                     let reld_section = ReldSection::from_bytes(source, size, i)?;
                     reld_sections.push(reld_section);
                 }
-                sections::SectionKind::Debug => {
+                SectionKind::Debug => {
                     return Err(ReadError::DebugSectionUnsupportedError);
                 }
-                sections::SectionKind::Unknown => {}
             }
         }
 
@@ -516,35 +632,30 @@ impl FromBytes for KOFile {
     }
 }
 
+/// The header of a Kerbal Object file
+#[derive(Debug)]
 pub struct KOHeader {
     magic: u32,
-    version: u8,
-    num_headers: u16,
-    strtab_idx: u16,
+    /// The version number of this Kerbal Object file
+    pub version: u8,
+    /// The number of headers contained within the section header table
+    pub num_headers: u16,
+    /// The index of the section header string table
+    pub sh_strtab_idx: u16,
 }
 
 impl KOHeader {
-    pub fn new(num_headers: u16, strtab_idx: u16) -> Self {
-        KOHeader {
+    /// Creates a new Kerbal Object file header
+    pub fn new(num_headers: u16, sh_strtab_idx: u16) -> Self {
+        Self {
             magic: MAGIC_NUMBER,
             version: FILE_VERSION,
             num_headers,
-            strtab_idx,
+            sh_strtab_idx,
         }
     }
 
-    pub fn version(&self) -> u8 {
-        self.version
-    }
-
-    pub fn num_headers(&self) -> u16 {
-        self.num_headers
-    }
-
-    pub fn strtab_idx(&self) -> u16 {
-        self.strtab_idx
-    }
-
+    /// Returns the size in bytes of a Kerbal Object file header
     pub fn size_bytes() -> usize {
         9
     }
@@ -555,12 +666,12 @@ impl ToBytes for KOHeader {
         self.magic.to_bytes(buf);
         self.version.to_bytes(buf);
         self.num_headers.to_bytes(buf);
-        self.strtab_idx.to_bytes(buf);
+        self.sh_strtab_idx.to_bytes(buf);
     }
 }
 
 impl FromBytes for KOHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {
@@ -570,8 +681,8 @@ impl FromBytes for KOHeader {
             u8::from_bytes(source).map_err(|_| ReadError::KOHeaderReadError("version"))?;
         let num_headers = u16::from_bytes(source)
             .map_err(|_| ReadError::KOHeaderReadError("number of headers"))?;
-        let strtab_idx = u16::from_bytes(source)
-            .map_err(|_| ReadError::KOHeaderReadError("string table index"))?;
+        let sh_strtab_idx = u16::from_bytes(source)
+            .map_err(|_| ReadError::KOHeaderReadError("section header string table index"))?;
 
         if magic != MAGIC_NUMBER {
             return Err(ReadError::InvalidKOFileMagicError);
@@ -581,11 +692,11 @@ impl FromBytes for KOHeader {
             return Err(ReadError::VersionMismatchError(version));
         }
 
-        Ok(KOHeader {
+        Ok(Self {
             magic,
             version,
             num_headers,
-            strtab_idx,
+            sh_strtab_idx,
         })
     }
 }

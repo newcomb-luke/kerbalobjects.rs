@@ -1,12 +1,13 @@
 use std::io::{Read, Write};
+use std::path::PathBuf;
 
 use kerbalobjects::{
-    kofile::{
+    ko::{
         instructions::Instr,
         symbols::{KOSymbol, ReldEntry},
         KOFile,
     },
-    FromBytes, KOSValue, Opcode, ToBytes,
+    FileIterator, FromBytes, KOSValue, Opcode, ToBytes,
 };
 
 #[test]
@@ -18,11 +19,11 @@ fn write_and_read_ko() {
 fn write_kofile() {
     let mut ko = KOFile::new();
 
-    let mut data_section = ko.new_datasection(".data");
-    let mut start = ko.new_funcsection("_start");
+    let mut data_section = ko.new_data_section(".data");
+    let mut start = ko.new_func_section("_start");
     let mut symtab = ko.new_symtab(".symtab");
     let mut symstrtab = ko.new_strtab(".symstrtab");
-    let mut reld_section = ko.new_reldsection(".reld");
+    let mut reld_section = ko.new_reld_section(".reld");
 
     let print_value = KOSValue::String(String::from("print()"));
     let print_value_index = data_section.add(print_value);
@@ -43,13 +44,13 @@ fn write_kofile() {
         marker_symbol_name_idx,
         marker_value_index,
         marker_value_size as u16,
-        kerbalobjects::kofile::symbols::SymBind::Global,
-        kerbalobjects::kofile::symbols::SymType::NoType,
+        kerbalobjects::ko::symbols::SymBind::Global,
+        kerbalobjects::ko::symbols::SymType::NoType,
         2,
     );
     let marker_symbol_index = symtab.add(marker_symbol);
 
-    let reld_entry = ReldEntry::new(3, 0, 0, marker_symbol_index);
+    let reld_entry = ReldEntry::new(3, 0, 0, marker_symbol_index as u32);
 
     reld_section.add(reld_entry);
 
@@ -69,8 +70,8 @@ fn write_kofile() {
         start_symbol_name_idx,
         0,
         start.size() as u16,
-        kerbalobjects::kofile::symbols::SymBind::Global,
-        kerbalobjects::kofile::symbols::SymType::Func,
+        kerbalobjects::ko::symbols::SymBind::Global,
+        kerbalobjects::ko::symbols::SymType::Func,
         3,
     );
 
@@ -79,8 +80,8 @@ fn write_kofile() {
         file_symbol_name_idx,
         0,
         0,
-        kerbalobjects::kofile::symbols::SymBind::Global,
-        kerbalobjects::kofile::symbols::SymType::File,
+        kerbalobjects::ko::symbols::SymBind::Global,
+        kerbalobjects::ko::symbols::SymType::File,
         0,
     );
 
@@ -95,12 +96,12 @@ fn write_kofile() {
 
     let mut file_buffer = Vec::with_capacity(2048);
 
-    ko.update_headers()
-        .expect("Could not update KO headers properly");
+    let ko = ko.finalize().expect("Could not update KO headers properly");
     ko.to_bytes(&mut file_buffer);
 
+    let file_path = PathBuf::from("tests").join("test.ko");
     let mut file =
-        std::fs::File::create("test.ko").expect("Output file could not be created: test.ko");
+        std::fs::File::create(file_path).expect("Output file could not be created: test.ko");
 
     file.write_all(file_buffer.as_slice())
         .expect("File test.ko could not be written to.");
@@ -108,12 +109,13 @@ fn write_kofile() {
 
 fn read_kofile() {
     let mut buffer = Vec::with_capacity(2048);
-    let mut file = std::fs::File::open("test.ko").expect("Error opening test.ko");
+    let file_path = PathBuf::from("tests").join("test.ko");
+    let mut file = std::fs::File::open(file_path).expect("Error opening test.ko");
 
     file.read_to_end(&mut buffer)
         .expect("Error reading test.ko");
 
-    let mut buffer_iter = buffer.iter().peekable();
+    let mut buffer_iter = FileIterator::new(&buffer);
 
     let _ko = KOFile::from_bytes(&mut buffer_iter).expect("Error reading KO file");
 }

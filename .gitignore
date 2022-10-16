@@ -16,5 +16,6 @@ Cargo.lock
 *.ksm
 
 !example.ksm
+!kash.ksm
 
 *.idea/

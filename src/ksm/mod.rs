@@ -1,18 +1,16 @@
-use std::{
-    io::{Read, Write},
-    iter::Peekable,
-    slice::Iter,
-};
+//! The module for describing, reading, and writing Kerbal Machine Code files
+use std::io::{Read, Write};
+use std::slice::Iter;
 
 use flate2::write::GzEncoder;
 use flate2::{read::GzDecoder, Compression};
 
-use crate::FromBytes;
-use crate::ToBytes;
 use crate::{
     errors::{ReadError, ReadResult},
-    ksmfile::sections::CodeSection,
+    ksm::sections::CodeSection,
 };
+use crate::{FileIterator, FromBytes};
+use crate::{KOSValue, ToBytes};
 
 pub mod errors;
 pub mod sections;
@@ -24,45 +22,58 @@ pub use instructions::Instr;
 
 const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 
+/// An in-memory representation of a KSM file
+///
+/// Can be modified, written, or read.
+#[derive(Debug)]
 pub struct KSMFile {
-    header: KSMHeader,
-    arg_section: ArgumentSection,
+    /// This file's header
+    pub header: KSMHeader,
+    /// This file's argument section
+    pub arg_section: ArgumentSection,
+    /// This file's debug section
+    pub debug_section: DebugSection,
     code_sections: Vec<CodeSection>,
-    debug_section: DebugSection,
 }
 
 impl KSMFile {
+    /// Creates a new KSM file that is empty except for the required argument section, and debug section
     pub fn new() -> Self {
-        KSMFile {
+        Self {
             header: KSMHeader::new(),
             arg_section: ArgumentSection::new(),
             code_sections: Vec::new(),
-            debug_section: DebugSection::new(1),
+            debug_section: DebugSection::new(),
         }
     }
 
-    pub fn arg_section(&self) -> &ArgumentSection {
-        &self.arg_section
+    /// Creates a new KSM file using the provided argument section, code sections, and debug section
+    pub fn new_from_parts(
+        arg_section: ArgumentSection,
+        code_sections: Vec<CodeSection>,
+        debug_section: DebugSection,
+    ) -> Self {
+        Self {
+            header: KSMHeader::new(),
+            arg_section,
+            code_sections,
+            debug_section,
+        }
     }
 
-    pub fn arg_section_mut(&mut self) -> &mut ArgumentSection {
-        &mut self.arg_section
+    /// A convenience function to add a value to this file's argument section
+    pub fn add_argument(&mut self, argument: KOSValue) {
+        self.arg_section.add(argument);
     }
 
+    /// Returns an iterator over all of the code sections in this file
     pub fn code_sections(&self) -> Iter<CodeSection> {
         self.code_sections.iter()
     }
 
+    /// Adds a new code section to this file
     pub fn add_code_section(&mut self, code_section: CodeSection) {
         self.code_sections.push(code_section);
-    }
-
-    pub fn debug_section(&self) -> &DebugSection {
-        &self.debug_section
-    }
-
-    pub fn debug_section_mut(&mut self) -> &mut DebugSection {
-        &mut self.debug_section
     }
 }
 
@@ -102,12 +113,11 @@ impl ToBytes for KSMFile {
 }
 
 impl FromBytes for KSMFile {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let zipped_contents: Vec<u8> = source.copied().collect();
-        let mut decoder = GzDecoder::new(zipped_contents.as_slice());
+        let mut decoder = GzDecoder::new(source);
 
         let mut decompressed: Vec<u8> = Vec::with_capacity(2048);
 
@@ -115,7 +125,7 @@ impl FromBytes for KSMFile {
             .read_to_end(&mut decompressed)
             .map_err(ReadError::KSMDecompressionError)?;
 
-        let mut decompressed_source = decompressed.iter().peekable();
+        let mut decompressed_source = FileIterator::new(&decompressed);
 
         let header = KSMHeader::from_bytes(&mut decompressed_source)?;
 
@@ -132,7 +142,7 @@ impl FromBytes for KSMFile {
             }
 
             if let Some(next) = decompressed_source.peek() {
-                if **next == b'D' {
+                if next == b'D' {
                     break;
                 }
 
@@ -160,11 +170,17 @@ impl FromBytes for KSMFile {
     }
 }
 
+/// A KSM file header.
+///
+/// The spec only requires it to contain the file's magic to identify it as a KSM file.
+/// So currently this type isn't extremely useful.
+#[derive(Debug)]
 pub struct KSMHeader {
     magic: u32,
 }
 
 impl KSMHeader {
+    /// Creates a new KSM file header
     pub fn new() -> Self {
         KSMHeader {
             magic: KSM_MAGIC_NUMBER,
@@ -185,7 +201,7 @@ impl ToBytes for KSMHeader {
 }
 
 impl FromBytes for KSMHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {

@@ -1,8 +1,6 @@
-use std::iter::Peekable;
-use std::slice::Iter;
-
+//! A collection of the sections that can be contained within a KO file
 use crate::errors::{ReadError, ReadResult};
-use crate::{FromBytes, ToBytes};
+use crate::{FileIterator, FromBytes, ToBytes};
 
 mod data_section;
 mod func_section;
@@ -16,33 +14,47 @@ pub use reld_section::*;
 pub use string_table::*;
 pub use symbol_table::*;
 
+/// An object that is a section, which can provide the index of itself in the section
+/// header table.
 pub trait SectionIndex {
+    /// Returns the index into the section header table for this section
     fn section_index(&self) -> usize;
 }
 
+/// The kind of section of an entry in the section header table
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
 pub enum SectionKind {
-    Null,
-    SymTab,
-    StrTab,
-    Func,
-    Data,
-    Debug,
-    Reld,
-    Unknown,
+    /// A null section. There is always a Null section entry in the section header table
+    /// which other parts of the object file can use to reference a section that does not exist.
+    Null = 0,
+    /// A symbol table
+    SymTab = 1,
+    /// A string table
+    StrTab = 2,
+    /// A function table
+    Func = 3,
+    /// A data section
+    Data = 4,
+    /// A debug section
+    Debug = 5,
+    /// A relocation data section
+    Reld = 6,
 }
 
-impl From<u8> for SectionKind {
-    fn from(byte: u8) -> Self {
+impl TryFrom<u8> for SectionKind {
+    type Error = ();
+
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
-            0 => Self::Null,
-            1 => Self::SymTab,
-            2 => Self::StrTab,
-            3 => Self::Func,
-            4 => Self::Data,
-            5 => Self::Debug,
-            6 => Self::Reld,
-            _ => Self::Unknown,
+            0 => Ok(Self::Null),
+            1 => Ok(Self::SymTab),
+            2 => Ok(Self::StrTab),
+            3 => Ok(Self::Func),
+            4 => Ok(Self::Data),
+            5 => Ok(Self::Debug),
+            6 => Ok(Self::Reld),
+            _ => Err(()),
         }
     }
 }
@@ -57,7 +69,6 @@ impl From<SectionKind> for u8 {
             SectionKind::Data => 4,
             SectionKind::Debug => 5,
             SectionKind::Reld => 6,
-            SectionKind::Unknown => 255,
         }
     }
 }
@@ -69,92 +80,72 @@ impl ToBytes for SectionKind {
 }
 
 impl FromBytes for SectionKind {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {
-        let value = *source.next().ok_or(ReadError::SectionKindReadError)?;
-        let kind = SectionKind::from(value);
+        let value = source.next().ok_or(ReadError::SectionKindReadError)?;
 
-        match kind {
-            SectionKind::Unknown => Err(ReadError::UnknownSectionKindReadError(value)),
-            _ => Ok(kind),
-        }
+        SectionKind::try_from(value).map_err(|_| ReadError::UnknownSectionKindReadError(value))
     }
 }
 
+/// A Kerbal Object file section header entry
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SectionHeader {
-    name_idx: usize,
-    sh_kind: SectionKind,
-    size: u32,
+    /// The index into the KO file's .shstrtab (section header string table) which stores
+    /// the name of this section.
+    pub name_idx: usize,
+    /// The section's kind
+    pub section_kind: SectionKind,
+    /// The size of this section in bytes
+    pub size: u32,
 }
 
 impl SectionHeader {
+    /// Creates a new null section header entry, which **must** be present as the first entry into
+    /// the section header table
     pub fn null() -> Self {
         SectionHeader {
             name_idx: 0,
-            sh_kind: SectionKind::Null,
+            section_kind: SectionKind::Null,
             size: 0,
         }
     }
 
-    pub fn new(name_idx: usize, sh_kind: SectionKind) -> Self {
-        SectionHeader {
+    /// Creates a new section header entry
+    pub fn new(name_idx: usize, section_kind: SectionKind) -> Self {
+        Self {
             name_idx,
-            sh_kind,
+            section_kind,
             size: 0,
         }
-    }
-
-    pub fn set_name_idx(&mut self, name_idx: usize) {
-        self.name_idx = name_idx;
-    }
-
-    pub fn name_idx(&self) -> usize {
-        self.name_idx
-    }
-
-    pub fn set_size(&mut self, size: u32) {
-        self.size = size;
-    }
-
-    pub fn size(&self) -> u32 {
-        self.size
-    }
-
-    pub fn kind(&self) -> SectionKind {
-        self.sh_kind
-    }
-
-    pub fn size_bytes() -> usize {
-        9
     }
 }
 
 impl ToBytes for SectionHeader {
     fn to_bytes(&self, buf: &mut Vec<u8>) {
         (self.name_idx as u32).to_bytes(buf);
-        self.sh_kind.to_bytes(buf);
+        self.section_kind.to_bytes(buf);
         self.size.to_bytes(buf);
     }
 }
 
 impl FromBytes for SectionHeader {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self>
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
     where
         Self: Sized,
     {
         let name_idx = u32::from_bytes(source)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("name index"))?
             as usize;
-        let sh_kind = SectionKind::from_bytes(source)?;
+        let section_kind = SectionKind::from_bytes(source)?;
         let size = u32::from_bytes(source)
             .map_err(|_| ReadError::SectionHeaderConstantReadError("size"))?;
 
-        Ok(SectionHeader {
+        Ok(Self {
             name_idx,
-            sh_kind,
+            section_kind,
             size,
         })
     }
@@ -163,12 +154,12 @@ impl FromBytes for SectionHeader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kofile::symbols::{SymBind, SymType};
+    use crate::ko::symbols::{SymBind, SymType};
     use crate::KOSValue;
 
     #[test]
     fn strtab_insert() {
-        let mut strtab = StringTable::new(8, 0);
+        let mut strtab = StringTable::with_capacity(8, 0);
 
         let index = strtab.add(".text");
 
@@ -178,14 +169,14 @@ mod tests {
 
     #[test]
     fn strtab_get_null() {
-        let strtab = StringTable::new(8, 0);
+        let strtab = StringTable::with_capacity(8, 0);
 
         assert_eq!(strtab.get(0).unwrap(), "");
     }
 
     #[test]
     fn strtab_get_str() {
-        let mut strtab = StringTable::new(8, 0);
+        let mut strtab = StringTable::with_capacity(8, 0);
 
         strtab.add("Hello");
 
@@ -194,7 +185,7 @@ mod tests {
 
     #[test]
     fn strtab_get_str_2() {
-        let mut strtab = StringTable::new(16, 0);
+        let mut strtab = StringTable::with_capacity(16, 0);
 
         strtab.add("Hello");
 
@@ -206,7 +197,7 @@ mod tests {
 
     #[test]
     fn strtab_strings() {
-        let mut strtab = StringTable::new(16, 0);
+        let mut strtab = StringTable::with_capacity(16, 0);
 
         strtab.add("Hello");
         strtab.add("rust");
@@ -222,10 +213,10 @@ mod tests {
 
     #[test]
     fn symtab_insert() {
-        use crate::kofile::symbols::KOSymbol;
+        use crate::ko::symbols::KOSymbol;
 
-        let mut strtab = StringTable::new(8, 0);
-        let mut symtab = SymbolTable::new(1, 0);
+        let mut strtab = StringTable::with_capacity(8, 0);
+        let mut symtab = SymbolTable::with_capacity(1, 0);
 
         let s_index = strtab.add("fn_add");
 
@@ -238,10 +229,10 @@ mod tests {
 
     #[test]
     fn symtab_get() {
-        use crate::kofile::symbols::KOSymbol;
+        use crate::ko::symbols::KOSymbol;
 
-        let mut strtab = StringTable::new(8, 0);
-        let mut symtab = SymbolTable::new(1, 0);
+        let mut strtab = StringTable::with_capacity(8, 0);
+        let mut symtab = SymbolTable::with_capacity(1, 0);
 
         let s_index = strtab.add("fn_add");
 
@@ -250,16 +241,14 @@ mod tests {
         let sym_index = symtab.add(sym);
 
         assert_eq!(
-            strtab
-                .get(symtab.get(sym_index).unwrap().name_idx())
-                .unwrap(),
+            strtab.get(symtab.get(sym_index).unwrap().name_idx).unwrap(),
             "fn_add"
         );
     }
 
     #[test]
     fn data_insert() {
-        let mut data_section = DataSection::new(1, 0);
+        let mut data_section = DataSection::with_capacity(1, 0);
 
         let index = data_section.add(KOSValue::Int32(365));
 
@@ -268,7 +257,7 @@ mod tests {
 
     #[test]
     fn data_insert_2() {
-        let mut data_section = DataSection::new(2, 0);
+        let mut data_section = DataSection::with_capacity(2, 0);
 
         data_section.add(KOSValue::ArgMarker);
 
@@ -279,7 +268,7 @@ mod tests {
 
     #[test]
     fn data_get() {
-        let mut data_section = DataSection::new(1, 0);
+        let mut data_section = DataSection::with_capacity(1, 0);
 
         let index = data_section.add(KOSValue::Int16(657));
 
@@ -289,7 +278,7 @@ mod tests {
     #[test]
     fn write_header() {
         let mut sh = SectionHeader::new(0, SectionKind::SymTab);
-        sh.set_size(42);
+        sh.size = 42;
 
         let mut buf = Vec::new();
 

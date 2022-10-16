@@ -1,17 +1,20 @@
-use crate::{FromBytes, Opcode, ReadResult, ToBytes};
-use std::iter::Peekable;
-use std::slice::Iter;
-
+//! kOS instructions as stored in a KO file.
 use crate::errors::ReadError;
+use crate::{FileIterator, FromBytes, Opcode, ReadResult, ToBytes};
 
+/// An instruction in a KO file
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Instr {
+    /// An instruction that takes no operands
     ZeroOp(Opcode),
+    /// An instruction that takes one operand
     OneOp(Opcode, usize),
+    /// An instruction that takes two operands
     TwoOp(Opcode, usize, usize),
 }
 
 impl Instr {
+    /// Returns the size in bytes that this instruction would take up in a KO file
     pub fn size_bytes(&self) -> usize {
         match &self {
             Self::ZeroOp(_) => 1,
@@ -20,6 +23,7 @@ impl Instr {
         }
     }
 
+    /// Returns the opcode of this instruction.
     pub fn opcode(&self) -> Opcode {
         match self {
             Self::ZeroOp(opcode) => *opcode,
@@ -50,7 +54,7 @@ impl ToBytes for Instr {
 
 // TODO: Docs and rewrite
 impl FromBytes for Instr {
-    fn from_bytes(source: &mut Peekable<Iter<u8>>) -> ReadResult<Self> {
+    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
         let opcode = Opcode::from_bytes(source)?;
 
         Ok(match opcode.num_operands() {
