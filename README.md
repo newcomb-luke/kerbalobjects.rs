@@ -36,4 +36,4 @@ Besides the documentation, support can be found by the library author in this [D
 
 If this library doesn't implement a specific feature that your program needs, then please create a new issue or contact the developer.
 
-If that cannot be resolbed, see docs/ for examples and explanations of the [KSM](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KSM-file-format.md) and [KO](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KO-file-format.md) file formats and how to create or read them.
+If that cannot be resolved, see docs/ for examples and explanations of the [KSM](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KSM-file-format.md) and [KO](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KO-file-format.md) file formats and how to create or read them.
