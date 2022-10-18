@@ -1,6 +1,6 @@
 //! The module for describing, reading, and writing Kerbal Machine Code files
 use std::io::{Read, Write};
-use std::slice::Iter;
+use std::slice::{Iter, IterMut};
 
 use flate2::write::GzEncoder;
 use flate2::{read::GzDecoder, Compression};
@@ -18,8 +18,10 @@ pub mod sections;
 use sections::{ArgumentSection, DebugSection};
 
 pub mod instructions;
+use crate::ksm::sections::{ArgIndex, DebugEntry};
 pub use instructions::Instr;
 
+// 'k' 3 'X' 'E'
 const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 
 /// An in-memory representation of a KSM file
@@ -62,13 +64,23 @@ impl KSMFile {
     }
 
     /// A convenience function to add a value to this file's argument section
-    pub fn add_argument(&mut self, argument: KOSValue) {
-        self.arg_section.add(argument);
+    pub fn add_argument(&mut self, argument: KOSValue) -> ArgIndex {
+        self.arg_section.add(argument)
+    }
+
+    /// A convenience function to add a debug entry to this file's debug section
+    pub fn add_debug_entry(&mut self, entry: DebugEntry) {
+        self.debug_section.add(entry)
     }
 
     /// Returns an iterator over all of the code sections in this file
     pub fn code_sections(&self) -> Iter<CodeSection> {
         self.code_sections.iter()
+    }
+
+    /// Returns a mutable iterator over all of the code sections in this file
+    pub fn code_sections_mut(&mut self) -> IterMut<CodeSection> {
+        self.code_sections.iter_mut()
     }
 
     /// Adds a new code section to this file
@@ -213,5 +225,109 @@ impl FromBytes for KSMHeader {
         }
 
         Ok(KSMHeader::new())
+    }
+}
+
+/// Describes the number of bytes that are required to store a given integer.
+///
+/// This is used to keep track of the number of bytes required to index into
+/// the KSM argument section, as well as the number of bytes required to represent
+/// a range in the debug section of a KSM file.
+///
+/// This provides an advantage over a raw integer type, because these
+/// values are the only ones currently supported by kOS and are discrete.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+#[repr(u8)]
+pub enum IntSize {
+    /// 1
+    One = 1,
+    /// 2
+    Two = 2,
+    /// 3
+    Three = 3,
+    /// 4
+    Four = 4,
+}
+
+impl TryFrom<u8> for IntSize {
+    type Error = u8;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::One),
+            2 => Ok(Self::Two),
+            3 => Ok(Self::Three),
+            4 => Ok(Self::Four),
+            _ => Err(value),
+        }
+    }
+}
+
+impl From<IntSize> for u8 {
+    fn from(num: IntSize) -> Self {
+        num as u8
+    }
+}
+
+// An internal function for reading an integer with a variable number of bytes.
+pub(crate) fn read_var_int(source: &mut FileIterator, width: IntSize) -> Result<u32, ()> {
+    match width {
+        IntSize::One => u8::from_bytes(source).map(|i| i.into()).map_err(|_| ()),
+        IntSize::Two => {
+            let mut slice = [0u8; 2];
+            for b in &mut slice {
+                *b = source.next().ok_or(())?;
+            }
+            Ok(u16::from_be_bytes(slice).into())
+        }
+        IntSize::Three => {
+            let mut slice = [0u8; 4];
+            for b in &mut slice[1..4] {
+                *b = source.next().ok_or(())?;
+            }
+
+            Ok(u32::from_be_bytes(slice))
+        }
+        IntSize::Four => {
+            let mut slice = [0u8; 4];
+            for b in &mut slice {
+                *b = source.next().ok_or(())?;
+            }
+            Ok(u32::from_be_bytes(slice))
+        }
+    }
+}
+
+// An internal function for writing an integer with a variable number of bytes.
+pub(crate) fn write_var_int(value: u32, buf: &mut Vec<u8>, width: IntSize) {
+    match width {
+        IntSize::One => {
+            (value as u8).to_bytes(buf);
+        }
+        IntSize::Two => {
+            buf.extend_from_slice(&(value as u16).to_be_bytes());
+        }
+        IntSize::Three => {
+            let slice = &value.to_be_bytes();
+            buf.extend_from_slice(&slice[1..4]);
+        }
+        IntSize::Four => {
+            buf.extend_from_slice(&value.to_be_bytes());
+        }
+    }
+}
+
+// An internal function for finding out the fewest number of bytes required to hold a value,
+// used for determining the size of var ints
+pub(crate) fn fewest_bytes_to_hold(value: u32) -> IntSize {
+    if value <= u8::MAX as u32 {
+        IntSize::One
+    } else if value <= u16::MAX as u32 {
+        IntSize::Two
+    } else if value <= 1677215u32 {
+        // 1677215 is the largest value that can be stored in 24 unsigned bits
+        IntSize::Three
+    } else {
+        IntSize::Four
     }
 }

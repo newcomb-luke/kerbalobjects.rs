@@ -1,6 +1,7 @@
 //! A module describing an argument section in a KSM file
 
 use crate::errors::{ArgumentSectionReadError, KSMReadError};
+use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
 use crate::{FileIterator, FromBytes, KOSValue, ReadError, ReadResult, ToBytes};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -19,49 +20,6 @@ pub enum ArgSectionReadError {
     ArgSectionHeaderMissing,
 }
 
-/// Describes the number of bytes that are required to store a reference to an argument
-/// in the argument section.
-///
-/// This provides an advantage over a raw integer type, because these
-/// values are the only ones currently supported by kOS and are discrete.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum NumArgIndexBytes {
-    /// 1
-    One = 1,
-    /// 2
-    Two = 2,
-    /// 3
-    Three = 3,
-    /// 4
-    Four = 4,
-}
-
-impl TryFrom<u8> for NumArgIndexBytes {
-    type Error = u8;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            1 => Ok(Self::One),
-            2 => Ok(Self::Two),
-            3 => Ok(Self::Three),
-            4 => Ok(Self::Four),
-            _ => Err(value),
-        }
-    }
-}
-
-impl From<NumArgIndexBytes> for u8 {
-    fn from(num: NumArgIndexBytes) -> Self {
-        match num {
-            NumArgIndexBytes::One => 1,
-            NumArgIndexBytes::Two => 2,
-            NumArgIndexBytes::Three => 3,
-            NumArgIndexBytes::Four => 4,
-        }
-    }
-}
-
 /// A wrapper type that represents an index into the argument section of a KSM file.
 ///
 /// This type implements From<usize> and usize implements From<ArgIndex>, but this is provided
@@ -78,55 +36,16 @@ impl ArgIndex {
     ///
     /// Returns either the ArgIndex, or a ReadError::UnexpectedEOF, which can only happen if we ran out of bytes.
     ///
-    pub fn from_bytes(
-        source: &mut FileIterator,
-        num_index_bytes: NumArgIndexBytes,
-    ) -> ReadResult<Self> {
-        match num_index_bytes {
-            NumArgIndexBytes::One => u8::from_bytes(source).map(|i| i.into()),
-            NumArgIndexBytes::Two => {
-                let mut slice = [0u8; 2];
-                for b in &mut slice {
-                    *b = source.next().ok_or(ReadError::UnexpectedEOF)?;
-                }
-                Ok(u16::from_be_bytes(slice).into())
-            }
-            NumArgIndexBytes::Three => {
-                let mut slice = [0u8; 4];
-                for b in &mut slice[1..4] {
-                    *b = source.next().ok_or(ReadError::UnexpectedEOF)?;
-                }
-
-                Ok(u32::from_be_bytes(slice).into())
-            }
-            NumArgIndexBytes::Four => {
-                let mut slice = [0u8; 4];
-                for b in &mut slice {
-                    *b = source.next().ok_or(ReadError::UnexpectedEOF)?;
-                }
-                Ok(u32::from_be_bytes(slice).into())
-            }
-        }
+    pub fn from_bytes(source: &mut FileIterator, index_bytes: IntSize) -> ReadResult<Self> {
+        read_var_int(source, index_bytes)
+            .map_err(|_| ReadError::UnexpectedEOF)
+            .map(|v| v.into())
     }
 
     /// Writes an ArgIndex into the provided buffer, using the NumArgIndexBytes, which
     /// is required to know how many bytes to use to write the index.
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, num_index_bytes: NumArgIndexBytes) {
-        match num_index_bytes {
-            NumArgIndexBytes::One => {
-                (self.0 as u8).to_bytes(buf);
-            }
-            NumArgIndexBytes::Two => {
-                buf.extend_from_slice(&(self.0 as u16).to_be_bytes());
-            }
-            NumArgIndexBytes::Three => {
-                let slice = &(self.0 as u32).to_be_bytes();
-                buf.extend_from_slice(&slice[1..4]);
-            }
-            NumArgIndexBytes::Four => {
-                buf.extend_from_slice(&(self.0 as u32).to_be_bytes());
-            }
-        }
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, index_bytes: IntSize) {
+        write_var_int(self.0 as u32, buf, index_bytes);
     }
 }
 
@@ -186,7 +105,7 @@ impl From<ArgIndex> for usize {
 /// See the [file format docs](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KSM-file-format.md#argument-section) for more details.
 #[derive(Debug)]
 pub struct ArgumentSection {
-    num_index_bytes: NumArgIndexBytes,
+    num_index_bytes: IntSize,
     hashes: HashMap<u64, ArgIndex>,
     arguments: Vec<KOSValue>,
     value_index_map: HashMap<ArgIndex, usize>,
@@ -200,7 +119,7 @@ impl ArgumentSection {
     /// Creates a new empty ArgumentSection
     pub fn new() -> Self {
         Self {
-            num_index_bytes: NumArgIndexBytes::One,
+            num_index_bytes: IntSize::One,
             hashes: HashMap::new(),
             arguments: Vec::new(),
             value_index_map: HashMap::new(),
@@ -211,7 +130,7 @@ impl ArgumentSection {
     /// Creates a new empty ArgumentSection, with the provided pre-allocated size
     pub fn with_capacity(amount: usize) -> Self {
         Self {
-            num_index_bytes: NumArgIndexBytes::One,
+            num_index_bytes: IntSize::One,
             hashes: HashMap::with_capacity(amount),
             arguments: Vec::with_capacity(amount),
             value_index_map: HashMap::with_capacity(amount),
@@ -223,7 +142,7 @@ impl ArgumentSection {
     ///
     /// This represents the current size range of this argument section, because this is the number
     /// of bytes that are required to reference an item within the argument section.
-    pub fn num_index_bytes(&self) -> NumArgIndexBytes {
+    pub fn num_index_bytes(&self) -> IntSize {
         self.num_index_bytes
     }
 
@@ -262,7 +181,7 @@ impl ArgumentSection {
         argument.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.hashes.insert(hash, arg_index);
+        self.hashes.entry(hash).or_insert(arg_index);
 
         self.arguments.push(argument);
         self.value_index_map.insert(arg_index, index);
@@ -297,16 +216,7 @@ impl ArgumentSection {
 
     // Recalculates the number of bytes required to reference any value within this section.
     fn recalculate_index_bytes(&mut self) {
-        self.num_index_bytes = if self.size_bytes <= u8::MAX as usize {
-            NumArgIndexBytes::One
-        } else if self.size_bytes <= u16::MAX as usize {
-            NumArgIndexBytes::Two
-        } else if self.size_bytes <= 1677215 {
-            // 1677215 is the largest value that can be stored in 24 unsigned bits
-            NumArgIndexBytes::Three
-        } else {
-            NumArgIndexBytes::Four
-        };
+        self.num_index_bytes = fewest_bytes_to_hold(self.size_bytes as u32);
     }
 }
 
@@ -355,7 +265,7 @@ impl FromBytes for ArgumentSection {
         let raw_num_index_bytes =
             u8::from_bytes(source).map_err(|_| ReadError::NumIndexBytesReadError)?;
 
-        let num_index_bytes: NumArgIndexBytes = raw_num_index_bytes
+        let num_index_bytes: IntSize = raw_num_index_bytes
             .try_into()
             .map_err(ReadError::InvalidNumIndexBytesError)?;
 
@@ -397,33 +307,76 @@ impl FromBytes for ArgumentSection {
 
 #[cfg(test)]
 mod tests {
-    use crate::ksm::sections::{ArgIndex, NumArgIndexBytes};
-    use crate::FileIterator;
+    use crate::ksm::sections::{ArgIndex, ArgumentSection};
+    use crate::ksm::IntSize;
+    use crate::{FileIterator, KOSValue, ToBytes};
+
+    #[test]
+    fn arg_section_checked() {
+        let mut arg_section = ArgumentSection::new();
+
+        let index = arg_section.add_checked(KOSValue::ArgMarker);
+        println!("{:?}", index);
+        arg_section.add_checked(KOSValue::ArgMarker);
+        arg_section.add_checked(KOSValue::ArgMarker);
+
+        let mut args = arg_section.arguments();
+
+        assert_eq!(KOSValue::ArgMarker, *args.next().unwrap());
+        assert!(args.next().is_none());
+
+        arg_section.add(KOSValue::ArgMarker);
+
+        let mut args = arg_section.arguments();
+
+        assert_eq!(KOSValue::ArgMarker, *args.next().unwrap());
+        assert_eq!(KOSValue::ArgMarker, *args.next().unwrap());
+        assert!(args.next().is_none());
+
+        let other_index = arg_section.add_checked(KOSValue::ArgMarker);
+
+        assert_eq!(index, other_index);
+    }
+
+    #[test]
+    fn size() {
+        let mut arg_section = ArgumentSection::new();
+
+        arg_section.add(KOSValue::ArgMarker);
+        arg_section.add(KOSValue::Bool(false));
+        arg_section.add(KOSValue::String("kOS".into()));
+
+        let mut buffer = Vec::with_capacity(128);
+
+        arg_section.to_bytes(&mut buffer);
+
+        assert_eq!(buffer.len(), arg_section.size_bytes());
+    }
 
     #[test]
     fn arg_index_read() {
         let data = vec![0x5, 0x4, 0x3];
         let mut source = FileIterator::new(&data);
 
-        let arg_index = ArgIndex::from_bytes(&mut source, NumArgIndexBytes::Three).unwrap();
+        let arg_index = ArgIndex::from_bytes(&mut source, IntSize::Three).unwrap();
         assert_eq!(arg_index, ArgIndex::from(0x00050403u32));
 
         let data = vec![0x1, 0x5, 0x4, 0x3];
         let mut source = FileIterator::new(&data);
 
-        let arg_index = ArgIndex::from_bytes(&mut source, NumArgIndexBytes::Four).unwrap();
+        let arg_index = ArgIndex::from_bytes(&mut source, IntSize::Four).unwrap();
         assert_eq!(arg_index, ArgIndex::from(0x01050403u32));
 
         let data = vec![0x4, 0x3];
         let mut source = FileIterator::new(&data);
 
-        let arg_index = ArgIndex::from_bytes(&mut source, NumArgIndexBytes::Two).unwrap();
+        let arg_index = ArgIndex::from_bytes(&mut source, IntSize::Two).unwrap();
         assert_eq!(arg_index, ArgIndex::from(0x0403u16));
 
         let data = vec![0x3];
         let mut source = FileIterator::new(&data);
 
-        let arg_index = ArgIndex::from_bytes(&mut source, NumArgIndexBytes::One).unwrap();
+        let arg_index = ArgIndex::from_bytes(&mut source, IntSize::One).unwrap();
         assert_eq!(arg_index, ArgIndex::from(0x03u8));
     }
 
@@ -432,25 +385,25 @@ mod tests {
         let arg_index = ArgIndex::from(0xffu8);
         let mut data = Vec::new();
 
-        arg_index.to_bytes(&mut data, NumArgIndexBytes::One);
+        arg_index.to_bytes(&mut data, IntSize::One);
         assert_eq!(data, Vec::from([0xff]));
 
         let arg_index = ArgIndex::from(0x03ffu16);
         let mut data = Vec::new();
 
-        arg_index.to_bytes(&mut data, NumArgIndexBytes::Two);
+        arg_index.to_bytes(&mut data, IntSize::Two);
         assert_eq!(data, Vec::from([0x03, 0xff]));
 
         let arg_index = ArgIndex::from(0x0503ffu32);
         let mut data = Vec::new();
 
-        arg_index.to_bytes(&mut data, NumArgIndexBytes::Three);
+        arg_index.to_bytes(&mut data, IntSize::Three);
         assert_eq!(data, Vec::from([0x05, 0x03, 0xff]));
 
         let arg_index = ArgIndex::from(0x05ffefffu32);
         let mut data = Vec::new();
 
-        arg_index.to_bytes(&mut data, NumArgIndexBytes::Four);
+        arg_index.to_bytes(&mut data, IntSize::Four);
         assert_eq!(data, Vec::from([0x05, 0xff, 0xef, 0xff]));
     }
 }

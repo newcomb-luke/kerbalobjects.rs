@@ -1,6 +1,7 @@
 //! A module describing a debug section in a KSM file
 use crate::{FileIterator, FromBytes, ReadError, ReadResult, ToBytes};
 
+use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
 use std::slice::Iter;
 
 /// Represents a range of bytes in the KSM file, from the beginning of the code sections, that store
@@ -19,6 +20,11 @@ impl DebugRange {
         DebugRange { start, end }
     }
 
+    /// Returns the size of a debug range in bytes, using the provided range size
+    pub fn size_bytes(&self, range_size: IntSize) -> usize {
+        2 * range_size as usize
+    }
+
     /// Converts this range to bytes and adds it to the provided buffer.
     ///
     /// This requires that the range size in bytes is specified, which describes how
@@ -26,65 +32,24 @@ impl DebugRange {
     ///
     /// The range size is based off of the length of the file, and is the debug
     /// section counterpart to NumArgIndexBytes
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: usize) {
-        DebugRange::write_variable(buf, self.start, range_size);
-        DebugRange::write_variable(buf, self.end, range_size);
-    }
-
-    // Writes a single range piece/index using the provided size.
-    fn write_variable(buf: &mut Vec<u8>, data: usize, size: usize) {
-        match size {
-            1 => {
-                (data as u8).to_bytes(buf);
-            }
-            2 => {
-                (data as u16).to_bytes(buf);
-            }
-            3 => {
-                let converted = data as u32;
-                let upper = (data >> 16) as u8;
-                let lower = (converted & 0x0000ffff) as u16;
-
-                upper.to_bytes(buf);
-                lower.to_bytes(buf);
-            }
-            4 => {
-                (data as u32).to_bytes(buf);
-            }
-            _ => unreachable!(),
-        }
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: IntSize) {
+        write_var_int(self.start as u32, buf, range_size);
+        write_var_int(self.end as u32, buf, range_size);
     }
 
     /// Parses a debug range, using the provided range size
-    pub fn from_bytes(source: &mut FileIterator, range_size: usize) -> ReadResult<Self> {
-        let start = DebugRange::read_variable(source, range_size)?;
-        let end = DebugRange::read_variable(source, range_size)?;
+    pub fn from_bytes(source: &mut FileIterator, range_size: IntSize) -> ReadResult<Self> {
+        let start =
+            read_var_int(source, range_size).map_err(|_| ReadError::DebugEntryReadError)? as usize;
+        let end =
+            read_var_int(source, range_size).map_err(|_| ReadError::DebugEntryReadError)? as usize;
 
-        Ok(DebugRange { start, end })
-    }
-
-    // Reads a single range piece/index using the provided size.
-    fn read_variable(source: &mut FileIterator, range_size: usize) -> ReadResult<usize> {
-        Ok(match range_size {
-            1 => (u8::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))? as usize,
-            2 => (u16::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))? as usize,
-            3 => {
-                let mut upper =
-                    u8::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError)? as u32;
-                upper <<= 24;
-                let lower =
-                    u16::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError)? as u32;
-
-                (upper | lower) as usize
-            }
-            4 => (u32::from_bytes(source).map_err(|_| ReadError::DebugRangeReadError))? as usize,
-            _ => unreachable!(),
-        })
+        Ok(Self { start, end })
     }
 }
 
 /// An entry into the debug section
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DebugEntry {
     /// The line number this entry refers to in the source code
     pub line_number: isize,
@@ -122,10 +87,20 @@ impl DebugEntry {
         self.ranges.get(index)
     }
 
+    /// Returns the size of this debug entry in bytes using the provided range size
+    pub fn size_bytes(&self, range_size: IntSize) -> usize {
+        // Two for the line number, one for the number of ranges
+        3 + self
+            .ranges
+            .iter()
+            .map(|r| r.size_bytes(range_size))
+            .sum::<usize>()
+    }
+
     /// Converts this debug entry into bytes and writes it into the provided buffer.
     ///
     /// Uses the range size specified in the debug section header
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: usize) {
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: IntSize) {
         (self.line_number as i16).to_bytes(buf);
         (self.number_ranges() as u8).to_bytes(buf);
 
@@ -137,7 +112,7 @@ impl DebugEntry {
     /// Parses this debug entry from bytes
     ///
     /// Uses the range size specified in the debug section header
-    pub fn from_bytes(source: &mut FileIterator, range_size: usize) -> ReadResult<Self> {
+    pub fn from_bytes(source: &mut FileIterator, range_size: IntSize) -> ReadResult<Self> {
         let line_number =
             i16::from_bytes(source).map_err(|_| ReadError::DebugEntryReadError)? as isize;
         let number_ranges =
@@ -164,31 +139,32 @@ impl DebugEntry {
 ///
 #[derive(Debug)]
 pub struct DebugSection {
-    /// Specified in the debug section's header, the size, in bytes, of a debug range
-    /// in all debug entries. This corresponds to the argument section's NumArgIndexBytes.
-    /// This is needed to know how many bytes are required to represent an index into this KSM file's
-    /// code sections.
-    pub range_size: usize,
+    range_size: IntSize,
     debug_entries: Vec<DebugEntry>,
 }
 
 impl DebugSection {
-    /// Creates a new debug section using the default range size of 1.
-    ///
-    /// Unfortunately, this debug section has no way to know what the range size
-    /// should be, as that depends on all of the previous code sections. So in order
-    /// for this debug section to work, we must update the range size after the rest of the file
-    /// has been generated.
-    ///
+    // 2 for the %D that goes before the section, 1 for the range size
+    const BEGIN_SIZE: usize = 3;
+
+    /// Creates a new empty debug section, defaulting to a debug range size of 1 byte
     pub fn new() -> Self {
-        DebugSection {
-            range_size: 1,
+        Self {
+            range_size: IntSize::One,
             debug_entries: Vec::new(),
         }
     }
 
     /// Adds a new debug entry to this debug section
     pub fn add(&mut self, entry: DebugEntry) {
+        // Check to see if we need to alter our range size bytes
+        for range in entry.ranges() {
+            let size = fewest_bytes_to_hold(range.start.max(range.end) as u32);
+            if size > self.range_size {
+                self.range_size = size;
+            }
+        }
+
         self.debug_entries.push(entry);
     }
 
@@ -196,16 +172,27 @@ impl DebugSection {
     pub fn debug_entries(&self) -> Iter<DebugEntry> {
         self.debug_entries.iter()
     }
-}
 
-impl Default for DebugSection {
-    fn default() -> Self {
-        Self::new()
+    /// Specified in the debug section's header, the size, in bytes, of a debug range
+    /// in all debug entries. This corresponds to the argument section's NumArgIndexBytes.
+    /// This is needed to know how many bytes are required to represent an index into this KSM file's
+    /// code sections.
+    pub fn range_size(&self) -> IntSize {
+        self.range_size
     }
-}
 
-impl ToBytes for DebugSection {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    /// Returns the current size of this debug section in bytes
+    pub fn size_bytes(&self) -> usize {
+        Self::BEGIN_SIZE
+            + self
+                .debug_entries
+                .iter()
+                .map(|e| e.size_bytes(self.range_size))
+                .sum::<usize>()
+    }
+
+    /// Converts this debug section into bytes and appends it to the provided buffer.
+    pub fn to_bytes(&self, buf: &mut Vec<u8>) {
         b'%'.to_bytes(buf);
         b'D'.to_bytes(buf);
 
@@ -214,6 +201,12 @@ impl ToBytes for DebugSection {
         for entry in self.debug_entries.iter() {
             entry.to_bytes(buf, self.range_size);
         }
+    }
+}
+
+impl Default for DebugSection {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -226,8 +219,10 @@ impl FromBytes for DebugSection {
             if next != b'D' {
                 Err(ReadError::ExpectedDebugSectionError(next))
             } else {
-                let range_size =
-                    u8::from_bytes(source).map_err(|_| ReadError::DebugSectionReadError)? as usize;
+                let raw_range_size =
+                    u8::from_bytes(source).map_err(|_| ReadError::DebugSectionReadError)?;
+                let range_size = IntSize::try_from(raw_range_size)
+                    .map_err(|_| ReadError::DebugSectionReadError)?;
                 let mut debug_entries = Vec::new();
 
                 while source.peek().is_some() {
@@ -236,7 +231,7 @@ impl FromBytes for DebugSection {
                     debug_entries.push(debug_entry);
                 }
 
-                Ok(DebugSection {
+                Ok(Self {
                     range_size,
                     debug_entries,
                 })
@@ -244,5 +239,30 @@ impl FromBytes for DebugSection {
         } else {
             Err(ReadError::MissingDebugSectionError)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ksm::sections::{DebugEntry, DebugRange, DebugSection};
+
+    #[test]
+    fn size() {
+        let mut debug_section = DebugSection::new();
+
+        let mut entry_1 = DebugEntry::new(1);
+        entry_1.add(DebugRange::new(0x04, 0x16));
+
+        let mut entry_2 = DebugEntry::new(2);
+        entry_2.add(DebugRange::new(0x17, 0x19));
+        entry_2.add(DebugRange::new(0x1a, 0x011f));
+
+        debug_section.add(entry_1);
+        debug_section.add(entry_2);
+
+        let mut buffer = Vec::with_capacity(128);
+        debug_section.to_bytes(&mut buffer);
+
+        assert_eq!(debug_section.size_bytes(), buffer.len());
     }
 }

@@ -1,6 +1,5 @@
 //! A module describing a code section in a KSM file
-use crate::ksm::sections::NumArgIndexBytes;
-use crate::ksm::Instr;
+use crate::ksm::{Instr, IntSize};
 use crate::{FileIterator, FromBytes, ReadError, ReadResult, ToBytes};
 use std::slice::Iter;
 
@@ -75,6 +74,9 @@ pub struct CodeSection {
 }
 
 impl CodeSection {
+    // 2 for the %F/I/M that goes before the section
+    const BEGIN_SIZE: usize = 2;
+
     /// Creates a new code section of the provided type
     pub fn new(section_type: CodeType) -> Self {
         CodeSection {
@@ -93,16 +95,27 @@ impl CodeSection {
         self.instructions.push(instr);
     }
 
+    /// Returns how large this section will be if it is written with the provided
+    /// number of argument index bytes
+    pub fn size_bytes(&self, index_bytes: IntSize) -> usize {
+        Self::BEGIN_SIZE
+            + self
+                .instructions
+                .iter()
+                .map(|i| i.size_bytes(index_bytes))
+                .sum::<usize>()
+    }
+
     /// Converts this code section into bytes and appends it to the provided buffer.
     ///
     /// This requires the number of bytes required to index into the argument section
     /// so that instruction operands can be written using the correct byte width.
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, num_index_bytes: NumArgIndexBytes) {
+    pub fn to_bytes(&self, buf: &mut Vec<u8>, index_bytes: IntSize) {
         buf.push(b'%');
         self.section_type.to_bytes(buf);
 
         for instr in self.instructions.iter() {
-            instr.to_bytes(buf, num_index_bytes);
+            instr.to_bytes(buf, index_bytes);
         }
     }
 
@@ -110,10 +123,7 @@ impl CodeSection {
     ///
     /// This requires the number of bytes required to index into the argument section
     /// so that instruction operands can be read using the correct byte width.
-    pub fn from_bytes(
-        source: &mut FileIterator,
-        num_index_bytes: NumArgIndexBytes,
-    ) -> ReadResult<Self> {
+    pub fn from_bytes(source: &mut FileIterator, index_bytes: IntSize) -> ReadResult<Self> {
         #[cfg(feature = "print_debug")]
         {
             print!("Reading code section, ");
@@ -134,7 +144,7 @@ impl CodeSection {
                     break;
                 }
 
-                let instr = Instr::from_bytes(source, num_index_bytes)?;
+                let instr = Instr::from_bytes(source, index_bytes)?;
 
                 #[cfg(feature = "print_debug")]
                 {
