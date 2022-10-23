@@ -125,6 +125,50 @@ impl ArgumentSection {
         }
     }
 
+    /// A builder-style method that takes an iterator of KOSValues that should be added
+    /// to this ArgumentSection
+    ///
+    /// This variant performs checking as the items are added
+    ///
+    /// This also returns a Vec<ArgIndex> that represent all of the indices that every element
+    /// inserted resides at, and will contain duplicates if duplicate elements were added.
+    ///
+    pub fn with_arguments_checked(
+        mut self,
+        iter: impl IntoIterator<Item = KOSValue>,
+    ) -> (Self, Vec<ArgIndex>) {
+        let iter = iter.into_iter();
+        let mut indices = Vec::with_capacity(iter.size_hint().0);
+
+        for item in iter {
+            indices.push(self.add_checked(item));
+        }
+
+        (self, indices)
+    }
+
+    /// A builder-style method that takes an iterator of KOSValues that should be added
+    /// to this ArgumentSection
+    ///
+    /// This variant does *not* perform checking as the items are added
+    ///
+    /// This also returns a Vec<ArgIndex> that represent all of the indices that every element
+    /// inserted resides at, and will *not* contain duplicates even if duplicate elements were added.
+    ///
+    pub fn with_arguments_unchecked(
+        mut self,
+        iter: impl IntoIterator<Item = KOSValue>,
+    ) -> (Self, Vec<ArgIndex>) {
+        let iter = iter.into_iter();
+        let mut indices = Vec::with_capacity(iter.size_hint().0);
+
+        for item in iter {
+            indices.push(self.add(item));
+        }
+
+        (self, indices)
+    }
+
     /// Returns the NumArgIndexBytes that this argument section currently requires.
     ///
     /// This represents the current size range of this argument section, because this is the number

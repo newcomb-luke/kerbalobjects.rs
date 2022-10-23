@@ -68,6 +68,14 @@ impl CodeSection {
         }
     }
 
+    /// A builder-style method that takes in an iterator of instructions that should
+    /// be added to this CodeSection
+    pub fn with_instructions(mut self, iter: impl IntoIterator<Item = Instr>) -> Self {
+        self.instructions.extend(iter);
+
+        self
+    }
+
     /// Returns an iterator over all of the instructions in this code section
     pub fn instructions(&self) -> Iter<Instr> {
         self.instructions.iter()

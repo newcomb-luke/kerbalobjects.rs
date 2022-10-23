@@ -73,8 +73,8 @@ pub mod instructions;
 use crate::ksm::sections::{ArgIndex, DebugEntry};
 pub use instructions::Instr;
 
-// 'k' 3 'X' 'E'
-const KSM_MAGIC_NUMBER: u32 = 0x6b035845;
+// 'k' 3 'X' 'E' but in little-endian form
+const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 
 /// An in-memory representation of a KSM file
 ///
@@ -254,7 +254,7 @@ impl KSMHeader {
     pub fn parse(source: &mut BufferIterator) -> Result<Self, HeaderParseError> {
         let magic = u32::from_bytes(source).map_err(|_: ()| HeaderParseError::EOF)?;
 
-        (magic != KSM_MAGIC_NUMBER)
+        (magic == KSM_MAGIC_NUMBER)
             .then_some(Self::new())
             .ok_or(HeaderParseError::InvalidMagic(magic))
     }

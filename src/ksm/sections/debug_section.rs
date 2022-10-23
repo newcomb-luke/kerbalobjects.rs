@@ -59,10 +59,25 @@ pub struct DebugEntry {
 impl DebugEntry {
     /// Creates a new debug entry with the provided line number
     pub fn new(line_number: isize) -> Self {
-        DebugEntry {
+        Self {
             line_number,
             ranges: Vec::new(),
         }
+    }
+
+    /// A builder-style method for creating a new DebugEntry while adding a debug range
+    pub fn with_range(mut self, range: DebugRange) -> Self {
+        self.ranges.push(range);
+
+        self
+    }
+
+    /// A builder-style method for creating a new DebugEntry which takes an iterator of DebugRanges
+    /// that should be added to this
+    pub fn with_ranges(mut self, iter: impl IntoIterator<Item = DebugRange>) -> Self {
+        self.ranges.extend(iter);
+
+        self
     }
 
     /// Adds a debug range to this entry
@@ -161,6 +176,16 @@ impl DebugSection {
         }
     }
 
+    /// A builder-style method that takes an iterator of DebugRanges that should be
+    /// added to this DebugSection
+    pub fn with_entries(mut self, iter: impl IntoIterator<Item = DebugEntry>) -> Self {
+        for item in iter {
+            self.add(item);
+        }
+
+        self
+    }
+
     /// Adds a new debug entry to this debug section
     pub fn add(&mut self, entry: DebugEntry) {
         // Check to see if we need to alter our range size bytes
@@ -238,6 +263,12 @@ impl DebugSection {
 impl Default for DebugSection {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl FromIterator<DebugEntry> for DebugSection {
+    fn from_iter<T: IntoIterator<Item = DebugEntry>>(iter: T) -> Self {
+        Self::new().with_entries(iter)
     }
 }
 
