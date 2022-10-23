@@ -1,16 +1,68 @@
-//! The module for describing, reading, and writing Kerbal Machine Code files
+//! # Kerbal Machine Code files
+//!
+//! This module is for describing, reading, and writing Kerbal Machine Code files
+//!
+//! Note that KSMFile::new() will for the most part, if written directly to a file, give you a valid KSM file.
+//! However, that is just in format, and kOS will complain with a horribly unintelligible error message about it.
+//!
+//! There ***must*** be at least one debug entry in the debug section.
+//!
+//! If an error occurs in a part of the code section, if it is
+//! filled with instructions, that is not mentioned in the debug section, kOS will say "maybe the error really is internal", so
+//! if you can, provide valid debug sections.
+//!
+//! ```
+//! use std::io::Write;
+//! use kerbalobjects::ksm::sections::{CodeSection, CodeType, DebugEntry, DebugRange};
+//! use kerbalobjects::ksm::{Instr, KSMFile};
+//! use kerbalobjects::{Opcode, KOSValue, ToBytes};
+//!
+//! let mut ksm_file = KSMFile::new();
+//!
+//! let arg_section = &mut ksm_file.arg_section;
+//! let mut main_code = CodeSection::new(CodeType::Main);
+//!
+//! let one = arg_section.add_checked(KOSValue::Int16(1));
+//!
+//! // Corresponds to the KerbalScript code:
+//! // PRINT("Hello, world!").
+//!
+//! main_code.add(Instr::OneOp(Opcode::Push, arg_section.add_checked(KOSValue::String("@0001".into()))));
+//! main_code.add(Instr::TwoOp(Opcode::Bscp, one, arg_section.add_checked(KOSValue::Int16(0))));
+//! main_code.add(Instr::ZeroOp(Opcode::Argb));
+//! main_code.add(Instr::OneOp(Opcode::Push, arg_section.add_checked(KOSValue::ArgMarker)));
+//! main_code.add(Instr::OneOp(Opcode::Push, arg_section.add_checked(KOSValue::StringValue("Hello, world!".into()))));
+//! main_code.add(Instr::TwoOp(Opcode::Call, arg_section.add_checked(KOSValue::String("".into())), arg_section.add_checked(KOSValue::String("print()".into()))));
+//! main_code.add(Instr::ZeroOp(Opcode::Pop));
+//! main_code.add(Instr::OneOp(Opcode::Escp, one));
+//!
+//! ksm_file.add_code_section(CodeSection::new(CodeType::Function));
+//! ksm_file.add_code_section(CodeSection::new(CodeType::Initialization));
+//! ksm_file.add_code_section(main_code);
+//!
+//! // A completely wrong and useless debug section, but we NEED to have one
+//! let mut debug_entry =  DebugEntry::new(1);
+//! debug_entry.add(DebugRange::new(0x06, 0x13));
+//! ksm_file.add_debug_entry(debug_entry);
+//!
+//! let mut file_buffer = Vec::with_capacity(2048);
+//!
+//! ksm_file.write(&mut file_buffer);
+//!
+//! let mut file = std::fs::File::create("hello.ksm").expect("Couldn't open output file");
+//!
+//! file.write_all(file_buffer.as_slice()).expect("Failed to write to output file");
+//! ```
+//!
 use std::io::{Read, Write};
 use std::slice::{Iter, IterMut};
 
 use flate2::write::GzEncoder;
 use flate2::{read::GzDecoder, Compression};
 
-use crate::{
-    errors::{ReadError, ReadResult},
-    ksm::sections::CodeSection,
-};
-use crate::{FileIterator, FromBytes};
-use crate::{KOSValue, ToBytes};
+use crate::BufferIterator;
+use crate::{ksm::sections::CodeSection, FromBytes, HeaderParseError, ToBytes};
+use crate::{KOSValue, KSMParseError};
 
 pub mod errors;
 pub mod sections;
@@ -22,7 +74,7 @@ use crate::ksm::sections::{ArgIndex, DebugEntry};
 pub use instructions::Instr;
 
 // 'k' 3 'X' 'E'
-const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
+const KSM_MAGIC_NUMBER: u32 = 0x6b035845;
 
 /// An in-memory representation of a KSM file
 ///
@@ -87,30 +139,77 @@ impl KSMFile {
     pub fn add_code_section(&mut self, code_section: CodeSection) {
         self.code_sections.push(code_section);
     }
-}
 
-impl Default for KSMFile {
-    fn default() -> Self {
-        Self::new()
+    /// Parses an entire KSMFile from a byte buffer
+    pub fn parse(source: &mut BufferIterator) -> Result<Self, KSMParseError> {
+        let source_len = source.len();
+
+        let mut decoder = GzDecoder::new(source);
+
+        // I think this is the best we can do
+        let mut decompressed: Vec<u8> = Vec::with_capacity(source_len);
+
+        decoder
+            .read_to_end(&mut decompressed)
+            .map_err(KSMParseError::DecompressionError)?;
+
+        let mut decompressed_source = BufferIterator::new(&decompressed);
+
+        let header =
+            KSMHeader::parse(&mut decompressed_source).map_err(KSMParseError::HeaderError)?;
+
+        let arg_section = ArgumentSection::parse(&mut decompressed_source)
+            .map_err(KSMParseError::ArgumentSectionParseError)?;
+
+        let mut code_sections = Vec::new();
+
+        loop {
+            // This is impossible, since we only break from reading the ArgumentSection or a CodeSection when we encounter a `%`
+            assert_eq!(decompressed_source.next().unwrap(), b'%');
+
+            let next = decompressed_source.peek().ok_or_else(|| {
+                KSMParseError::MissingSectionType(decompressed_source.current_index())
+            })?;
+
+            // This means the next section is a debug section
+            if next == b'D' {
+                break;
+            }
+
+            let code_section =
+                CodeSection::parse(&mut decompressed_source, arg_section.num_index_bytes())
+                    .map_err(KSMParseError::CodeSectionParseError)?;
+
+            code_sections.push(code_section);
+        }
+
+        let debug_section = DebugSection::parse(&mut decompressed_source)
+            .map_err(KSMParseError::DebugSectionParseError)?;
+
+        Ok(Self {
+            header,
+            arg_section,
+            code_sections,
+            debug_section,
+        })
     }
-}
 
-impl ToBytes for KSMFile {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    /// Writes the binary representation of this KSM file to the provided buffer
+    pub fn write(&self, buf: &mut Vec<u8>) {
         let mut uncompressed_buf = Vec::with_capacity(2048);
         let mut zipped_contents = Vec::with_capacity(2048);
 
-        self.header.to_bytes(&mut uncompressed_buf);
+        self.header.write(&mut uncompressed_buf);
 
-        self.arg_section.to_bytes(&mut uncompressed_buf);
+        self.arg_section.write(&mut uncompressed_buf);
 
         let mut encoder = GzEncoder::new(&mut zipped_contents, Compression::best());
 
         for code_section in self.code_sections.iter() {
-            code_section.to_bytes(&mut uncompressed_buf, self.arg_section.num_index_bytes());
+            code_section.write(&mut uncompressed_buf, self.arg_section.num_index_bytes());
         }
 
-        self.debug_section.to_bytes(&mut uncompressed_buf);
+        self.debug_section.write(&mut uncompressed_buf);
 
         encoder
             .write_all(&uncompressed_buf)
@@ -124,61 +223,9 @@ impl ToBytes for KSMFile {
     }
 }
 
-impl FromBytes for KSMFile {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
-    where
-        Self: Sized,
-    {
-        let mut decoder = GzDecoder::new(source);
-
-        let mut decompressed: Vec<u8> = Vec::with_capacity(2048);
-
-        decoder
-            .read_to_end(&mut decompressed)
-            .map_err(ReadError::KSMDecompressionError)?;
-
-        let mut decompressed_source = FileIterator::new(&decompressed);
-
-        let header = KSMHeader::from_bytes(&mut decompressed_source)?;
-
-        let arg_section = ArgumentSection::from_bytes(&mut decompressed_source)?;
-
-        let mut code_sections = Vec::new();
-
-        loop {
-            let delimiter = u8::from_bytes(&mut decompressed_source)
-                .map_err(|_| ReadError::MissingCodeSectionError)?;
-
-            if delimiter != b'%' {
-                return Err(ReadError::ExpectedCodeSectionError(delimiter));
-            }
-
-            if let Some(next) = decompressed_source.peek() {
-                if next == b'D' {
-                    break;
-                }
-
-                let code_section = CodeSection::from_bytes(
-                    &mut decompressed_source,
-                    arg_section.num_index_bytes(),
-                )?;
-
-                code_sections.push(code_section);
-            } else {
-                return Err(ReadError::MissingCodeSectionError);
-            }
-        }
-
-        let debug_section = DebugSection::from_bytes(&mut decompressed_source)?;
-
-        let ksm = KSMFile {
-            header,
-            arg_section,
-            code_sections,
-            debug_section,
-        };
-
-        Ok(ksm)
+impl Default for KSMFile {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -198,33 +245,29 @@ impl KSMHeader {
             magic: KSM_MAGIC_NUMBER,
         }
     }
+
+    /// Parses a KSM file header from a source buffer
+    ///
+    /// This can fail if the source doesn't have enough bytes to parse,
+    /// or if the first 4 bytes do not correspond to the KSM file header "magic number"
+    ///
+    pub fn parse(source: &mut BufferIterator) -> Result<Self, HeaderParseError> {
+        let magic = u32::from_bytes(source).map_err(|_: ()| HeaderParseError::EOF)?;
+
+        (magic != KSM_MAGIC_NUMBER)
+            .then_some(Self::new())
+            .ok_or(HeaderParseError::InvalidMagic(magic))
+    }
+
+    /// Appends the byte representation of this file header to a buffer of bytes
+    pub fn write(&self, buf: &mut Vec<u8>) {
+        self.magic.to_bytes(buf)
+    }
 }
 
 impl Default for KSMHeader {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl ToBytes for KSMHeader {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        self.magic.to_bytes(buf);
-    }
-}
-
-impl FromBytes for KSMHeader {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
-    where
-        Self: Sized,
-    {
-        let magic =
-            u32::from_bytes(source).map_err(|_| ReadError::KSMHeaderReadError("file magic"))?;
-
-        if magic != KSM_MAGIC_NUMBER {
-            return Err(ReadError::InvalidKSMFileMagicError);
-        }
-
-        Ok(KSMHeader::new())
     }
 }
 
@@ -270,9 +313,9 @@ impl From<IntSize> for u8 {
 }
 
 // An internal function for reading an integer with a variable number of bytes.
-pub(crate) fn read_var_int(source: &mut FileIterator, width: IntSize) -> Result<u32, ()> {
+pub(crate) fn read_var_int(source: &mut BufferIterator, width: IntSize) -> Result<u32, ()> {
     match width {
-        IntSize::One => u8::from_bytes(source).map(|i| i.into()).map_err(|_| ()),
+        IntSize::One => u8::from_bytes(source).map(|i| i.into()),
         IntSize::Two => {
             let mut slice = [0u8; 2];
             for b in &mut slice {

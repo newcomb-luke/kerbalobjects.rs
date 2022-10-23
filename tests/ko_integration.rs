@@ -1,3 +1,4 @@
+#![cfg(feature = "ko")]
 use std::io::{Read, Write};
 use std::path::PathBuf;
 

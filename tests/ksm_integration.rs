@@ -1,3 +1,4 @@
+#![cfg(feature = "ksm")]
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
@@ -6,7 +7,7 @@ use kerbalobjects::{
         sections::{CodeSection, CodeType, DebugEntry, DebugRange},
         Instr, KSMFile,
     },
-    FileIterator, FromBytes, KOSValue, Opcode, ToBytes,
+    BufferIterator, KOSValue, Opcode,
 };
 
 /// This test is simply a large file that kerbalobjects should be able to read
@@ -22,7 +23,7 @@ fn read_kosos_kash() {
     file.read_to_end(&mut buffer)
         .expect("Error reading kash.ksm");
 
-    let mut buffer_iter = FileIterator::new(&buffer);
+    let mut buffer_iter = BufferIterator::new(&buffer);
 
     let expected_args = vec![
         KOSValue::String("@0001".into()),
@@ -40,7 +41,7 @@ fn read_kosos_kash() {
         KOSValue::Int16(3),
     ];
 
-    let ksm = KSMFile::from_bytes(&mut buffer_iter).expect("Error reading KSM file");
+    let ksm = KSMFile::parse(&mut buffer_iter).expect("Error reading KSM file");
 
     let mut arg_section_args = ksm.arg_section.arguments();
 
@@ -92,9 +93,9 @@ fn read_kos_ksm() {
     file.read_to_end(&mut buffer)
         .expect("Error reading example.ksm");
 
-    let mut buffer_iter = FileIterator::new(&buffer);
+    let mut buffer_iter = BufferIterator::new(&buffer);
 
-    let _ksm = KSMFile::from_bytes(&mut buffer_iter).expect("Error reading KSM file");
+    let _ksm = KSMFile::parse(&mut buffer_iter).expect("Error reading KSM file");
 }
 
 #[test]
@@ -166,7 +167,7 @@ fn write_ksm() {
 
     let mut file_buffer = Vec::with_capacity(2048);
 
-    ksm.to_bytes(&mut file_buffer);
+    ksm.write(&mut file_buffer);
 
     let file_path = PathBuf::from("tests").join("test.ksm");
     let mut file = std::fs::File::create(file_path).expect("Error opening test.ksm");
@@ -183,7 +184,7 @@ fn read_ksm() {
     file.read_to_end(&mut buffer)
         .expect("Error reading test.ksm");
 
-    let mut buffer_iter = FileIterator::new(&buffer);
+    let mut buffer_iter = BufferIterator::new(&buffer);
 
-    let _ksm = KSMFile::from_bytes(&mut buffer_iter);
+    let _ksm = KSMFile::parse(&mut buffer_iter);
 }

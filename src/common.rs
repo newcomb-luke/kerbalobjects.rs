@@ -2,19 +2,19 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-use crate::errors::{ReadError, ReadResult};
+use crate::{KOSValueParseError, OpcodeParseError};
 
 /// A struct to iterate over the bytes of a buffer, and keep track of the current position
 /// for better error messages
 #[derive(Debug, Clone)]
-pub struct FileIterator<'a> {
+pub struct BufferIterator<'a> {
     index: usize,
-    source: &'a Vec<u8>,
+    source: &'a [u8],
 }
 
-impl<'a> FileIterator<'a> {
-    /// Creates a new FileIterator over a source buffer
-    pub fn new(source: &'a Vec<u8>) -> Self {
+impl<'a> BufferIterator<'a> {
+    /// Creates a new BufferIterator over a source buffer
+    pub fn new(source: &'a [u8]) -> Self {
         Self { index: 0, source }
     }
 
@@ -34,9 +34,19 @@ impl<'a> FileIterator<'a> {
     pub fn collect_vec(self) -> Vec<u8> {
         self.source.to_vec()
     }
+
+    /// Returns the size of the source buffer
+    pub fn len(&self) -> usize {
+        self.source.len()
+    }
+
+    /// Returns true if this iterator is empty
+    pub fn is_empty(&self) -> bool {
+        self.current_index() == self.source.len()
+    }
 }
 
-impl Iterator for FileIterator<'_> {
+impl Iterator for BufferIterator<'_> {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -47,11 +57,15 @@ impl Iterator for FileIterator<'_> {
 
         Some(b)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
 }
 
-impl std::io::Read for FileIterator<'_> {
+impl std::io::Read for BufferIterator<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.source.as_slice().read(buf)
+        self.source.read(buf)
     }
 }
 
@@ -61,14 +75,99 @@ pub trait ToBytes {
     fn to_bytes(&self, buf: &mut Vec<u8>);
 }
 
-/// Allows a type to be converted from bytes from a FileIterator to itself.
+/// Allows a type to be converted from bytes from a BufferIterator to itself.
 pub trait FromBytes {
-    /// Parses a value from the file iterator.
-    ///
-    /// Returns a ReadResult\<Self\>
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
+    /// The error type returned when the conversion fails
+    type Error;
+    /// Parses a value from the buffer iterator.
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error>
     where
         Self: Sized;
+}
+
+/// The type of an internal value within Kerbal Operating System.
+///
+/// See [KOSValue](crate::KOSValue) for what these values look like.
+///
+/// This enum just describes the "type" of the KOSValue, which is stored as a single
+/// byte that prefixes the value (if there is one), which allows kOS to know how to interpret
+/// the following bytes.
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum KOSType {
+    /// A null value
+    Null = 0,
+    /// A raw boolean
+    Bool = 1,
+    /// A single (signed) byte
+    Byte = 2,
+    /// A signed 16-bit integer
+    Int16 = 3,
+    /// A signed 32-bit integer
+    Int32 = 4,
+    /// A 32-bit floating point number
+    Float = 5,
+    /// A 64-bit floating point number
+    Double = 6,
+    /// A raw string
+    String = 7,
+    /// An argument marker
+    ArgMarker = 8,
+    /// A signed 32-bit integer "value"
+    ScalarInt = 9,
+    /// A 64-bit floating point number "value"
+    ScalarDouble = 10,
+    /// A boolean "value"
+    BoolValue = 11,
+    /// A string "value"
+    StringValue = 12,
+}
+
+impl From<KOSType> for u8 {
+    fn from(t: KOSType) -> Self {
+        t as u8
+    }
+}
+
+impl TryFrom<u8> for KOSType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Null),
+            1 => Ok(Self::Bool),
+            2 => Ok(Self::Byte),
+            3 => Ok(Self::Int16),
+            4 => Ok(Self::Int32),
+            5 => Ok(Self::Float),
+            6 => Ok(Self::Double),
+            7 => Ok(Self::String),
+            8 => Ok(Self::ArgMarker),
+            9 => Ok(Self::ScalarInt),
+            10 => Ok(Self::ScalarDouble),
+            11 => Ok(Self::BoolValue),
+            12 => Ok(Self::StringValue),
+            _ => Err(()),
+        }
+    }
+}
+
+impl ToBytes for KOSType {
+    fn to_bytes(&self, buf: &mut Vec<u8>) {
+        (*self as u8).to_bytes(buf);
+    }
+}
+
+impl FromBytes for KOSType {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error>
+    where
+        Self: Sized,
+    {
+        Self::try_from(u8::from_bytes(source)?)
+    }
 }
 
 /// An internal value within Kerbal Operating System.
@@ -256,32 +355,32 @@ impl ToBytes for KOSValue {
 }
 
 impl FromBytes for KOSValue {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
+    type Error = KOSValueParseError;
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error>
     where
         Self: Sized,
     {
-        let kos_type_value = source.next().ok_or(ReadError::KOSValueReadError)?;
+        let raw_type = source.next().ok_or(KOSValueParseError::EOF)?;
+        let kos_type =
+            KOSType::try_from(raw_type).map_err(|_| KOSValueParseError::InvalidType(raw_type))?;
 
-        match kos_type_value {
-            t if t < 13 => match t {
-                0 => Ok(KOSValue::Null),
-                1 => bool::from_bytes(source).map(KOSValue::Bool),
-                2 => i8::from_bytes(source).map(KOSValue::Byte),
-                3 => i16::from_bytes(source).map(KOSValue::Int16),
-                4 => i32::from_bytes(source).map(KOSValue::Int32),
-                5 => f32::from_bytes(source).map(KOSValue::Float),
-                6 => f64::from_bytes(source).map(KOSValue::Double),
-                7 => String::from_bytes(source).map(KOSValue::String),
-                8 => Ok(KOSValue::ArgMarker),
-                9 => i32::from_bytes(source).map(KOSValue::ScalarInt),
-                10 => f64::from_bytes(source).map(KOSValue::ScalarDouble),
-                11 => bool::from_bytes(source).map(KOSValue::BoolValue),
-                12 => String::from_bytes(source).map(KOSValue::StringValue),
-                _ => unreachable!(),
-            }
-            .map_err(|_| ReadError::KOSValueReadError),
-            _ => Err(ReadError::KOSValueTypeReadError(kos_type_value)),
+        match kos_type {
+            KOSType::Null => Ok(KOSValue::Null),
+            KOSType::Bool => bool::from_bytes(source).map(KOSValue::Bool),
+            KOSType::Byte => i8::from_bytes(source).map(KOSValue::Byte),
+            KOSType::Int16 => i16::from_bytes(source).map(KOSValue::Int16),
+            KOSType::Int32 => i32::from_bytes(source).map(KOSValue::Int32),
+            KOSType::Float => f32::from_bytes(source).map(KOSValue::Float),
+            KOSType::Double => f64::from_bytes(source).map(KOSValue::Double),
+            KOSType::String => String::from_bytes(source).map(KOSValue::String),
+            KOSType::ArgMarker => Ok(KOSValue::ArgMarker),
+            KOSType::ScalarInt => i32::from_bytes(source).map(KOSValue::ScalarInt),
+            KOSType::ScalarDouble => f64::from_bytes(source).map(KOSValue::ScalarDouble),
+            KOSType::BoolValue => bool::from_bytes(source).map(KOSValue::BoolValue),
+            KOSType::StringValue => String::from_bytes(source).map(KOSValue::StringValue),
         }
+        .map_err(|_| KOSValueParseError::EOF)
     }
 }
 
@@ -352,37 +451,39 @@ impl ToBytes for String {
 }
 
 impl FromBytes for bool {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        source
-            .next()
-            .map(|x| x != 0)
-            .ok_or(ReadError::UnexpectedEOF)
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
+        source.next().map(|x| x != 0).ok_or(())
     }
 }
 
 impl FromBytes for u8 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        source.next().ok_or(ReadError::UnexpectedEOF)
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
+        source.next().ok_or(())
     }
 }
 
 impl FromBytes for i8 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        source
-            .next()
-            .map(|x| x as i8)
-            .ok_or(ReadError::UnexpectedEOF)
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
+        source.next().map(|x| x as i8).ok_or(())
     }
 }
 
 impl FromBytes for u16 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 2];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(u16::from_le_bytes(slice))
@@ -390,13 +491,15 @@ impl FromBytes for u16 {
 }
 
 impl FromBytes for i16 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 2];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(i16::from_le_bytes(slice))
@@ -404,13 +507,15 @@ impl FromBytes for i16 {
 }
 
 impl FromBytes for u32 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 4];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(u32::from_le_bytes(slice))
@@ -418,13 +523,15 @@ impl FromBytes for u32 {
 }
 
 impl FromBytes for i32 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 4];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(i32::from_le_bytes(slice))
@@ -432,13 +539,15 @@ impl FromBytes for i32 {
 }
 
 impl FromBytes for f32 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 4];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(f32::from_le_bytes(slice))
@@ -446,13 +555,15 @@ impl FromBytes for f32 {
 }
 
 impl FromBytes for f64 {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         let mut slice = [0u8; 8];
         for b in &mut slice {
             if let Some(byte) = source.next() {
                 *b = byte;
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(f64::from_le_bytes(slice))
@@ -460,14 +571,16 @@ impl FromBytes for f64 {
 }
 
 impl FromBytes for String {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        let len = source.next().ok_or(ReadError::UnexpectedEOF)? as usize;
+    type Error = ();
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
+        let len = source.next().ok_or(())? as usize;
         let mut s = String::with_capacity(len);
         for _ in 0..len {
             if let Some(byte) = source.next() {
                 s.push(byte as char);
             } else {
-                return Err(ReadError::UnexpectedEOF);
+                return Err(());
             }
         }
         Ok(s)
@@ -949,12 +1062,14 @@ impl ToBytes for Opcode {
 }
 
 impl FromBytes for Opcode {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        let value = source.next().ok_or(ReadError::OpcodeReadError)?;
+    type Error = OpcodeParseError;
+
+    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
+        let value = source.next().ok_or(OpcodeParseError::EOF)?;
         let opcode = Opcode::from(value);
 
         match opcode {
-            Opcode::Bogus => Err(ReadError::BogusOpcodeReadError(value)),
+            Opcode::Bogus => Err(OpcodeParseError::InvalidOpcode(value)),
             _ => Ok(opcode),
         }
     }

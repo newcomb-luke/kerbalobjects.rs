@@ -1,6 +1,6 @@
 //! A module describing a code section in a KSM file
 use crate::ksm::{Instr, IntSize};
-use crate::{FileIterator, FromBytes, ReadError, ReadResult, ToBytes};
+use crate::{BufferIterator, CodeSectionParseError, FromBytes, ToBytes};
 use std::slice::Iter;
 
 /// The type of code that a code section is
@@ -16,14 +16,14 @@ pub enum CodeType {
 }
 
 impl TryFrom<u8> for CodeType {
-    type Error = ();
+    type Error = u8;
 
     fn try_from(byte: u8) -> Result<Self, Self::Error> {
         match byte {
             b'F' => Ok(CodeType::Function),
             b'I' => Ok(CodeType::Initialization),
             b'M' => Ok(CodeType::Main),
-            _ => Err(()),
+            _ => Err(byte),
         }
     }
 }
@@ -35,23 +35,6 @@ impl From<CodeType> for u8 {
             CodeType::Initialization => b'I',
             CodeType::Main => b'M',
         }
-    }
-}
-
-impl ToBytes for CodeType {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.push((*self).into());
-    }
-}
-
-impl FromBytes for CodeType {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
-    where
-        Self: Sized,
-    {
-        let value = source.next().ok_or(ReadError::CodeTypeReadError)?;
-
-        CodeType::try_from(value).map_err(|_| ReadError::UnknownCodeTypeReadError(value as char))
     }
 }
 
@@ -110,12 +93,12 @@ impl CodeSection {
     ///
     /// This requires the number of bytes required to index into the argument section
     /// so that instruction operands can be written using the correct byte width.
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, index_bytes: IntSize) {
+    pub fn write(&self, buf: &mut Vec<u8>, index_bytes: IntSize) {
         buf.push(b'%');
-        self.section_type.to_bytes(buf);
+        u8::from(self.section_type).to_bytes(buf);
 
         for instr in self.instructions.iter() {
-            instr.to_bytes(buf, index_bytes);
+            instr.write(buf, index_bytes);
         }
     }
 
@@ -123,13 +106,19 @@ impl CodeSection {
     ///
     /// This requires the number of bytes required to index into the argument section
     /// so that instruction operands can be read using the correct byte width.
-    pub fn from_bytes(source: &mut FileIterator, index_bytes: IntSize) -> ReadResult<Self> {
+    pub fn parse(
+        source: &mut BufferIterator,
+        index_bytes: IntSize,
+    ) -> Result<Self, CodeSectionParseError> {
         #[cfg(feature = "print_debug")]
         {
             print!("Reading code section, ");
         }
 
-        let section_type = CodeType::from_bytes(source)?;
+        let raw_section_type =
+            u8::from_bytes(source).map_err(|_| CodeSectionParseError::MissingCodeSectionType)?;
+        let section_type = CodeType::try_from(raw_section_type)
+            .map_err(CodeSectionParseError::InvalidCodeSectionType)?;
 
         #[cfg(feature = "print_debug")]
         {
@@ -144,7 +133,8 @@ impl CodeSection {
                     break;
                 }
 
-                let instr = Instr::from_bytes(source, index_bytes)?;
+                let instr = Instr::parse(source, index_bytes)
+                    .map_err(CodeSectionParseError::InstrParseError)?;
 
                 #[cfg(feature = "print_debug")]
                 {
@@ -153,7 +143,7 @@ impl CodeSection {
 
                 instructions.push(instr);
             } else {
-                return Err(ReadError::CodeSectionReadError);
+                return Err(CodeSectionParseError::EOF);
             }
         }
 

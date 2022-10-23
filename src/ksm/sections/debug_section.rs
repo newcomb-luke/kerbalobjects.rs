@@ -1,5 +1,5 @@
 //! A module describing a debug section in a KSM file
-use crate::{FileIterator, FromBytes, ReadError, ReadResult, ToBytes};
+use crate::{BufferIterator, DebugEntryParseError, DebugSectionParseError, FromBytes, ToBytes};
 
 use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
 use std::slice::Iter;
@@ -25,24 +25,24 @@ impl DebugRange {
         2 * range_size as usize
     }
 
-    /// Converts this range to bytes and adds it to the provided buffer.
+    /// Converts this range to bytes and writes it to the provided buffer.
     ///
     /// This requires that the range size in bytes is specified, which describes how
     /// many bytes are required to describe a range start or end.
     ///
     /// The range size is based off of the length of the file, and is the debug
     /// section counterpart to NumArgIndexBytes
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: IntSize) {
+    pub fn write(&self, buf: &mut Vec<u8>, range_size: IntSize) {
         write_var_int(self.start as u32, buf, range_size);
         write_var_int(self.end as u32, buf, range_size);
     }
 
     /// Parses a debug range, using the provided range size
-    pub fn from_bytes(source: &mut FileIterator, range_size: IntSize) -> ReadResult<Self> {
-        let start =
-            read_var_int(source, range_size).map_err(|_| ReadError::DebugEntryReadError)? as usize;
-        let end =
-            read_var_int(source, range_size).map_err(|_| ReadError::DebugEntryReadError)? as usize;
+    ///
+    /// The only reason that this can fail is if we run out of bytes
+    pub fn parse(source: &mut BufferIterator, range_size: IntSize) -> Result<Self, ()> {
+        let start = read_var_int(source, range_size)? as usize;
+        let end = read_var_int(source, range_size)? as usize;
 
         Ok(Self { start, end })
     }
@@ -100,27 +100,33 @@ impl DebugEntry {
     /// Converts this debug entry into bytes and writes it into the provided buffer.
     ///
     /// Uses the range size specified in the debug section header
-    pub fn to_bytes(&self, buf: &mut Vec<u8>, range_size: IntSize) {
+    pub fn write(&self, buf: &mut Vec<u8>, range_size: IntSize) {
         (self.line_number as i16).to_bytes(buf);
         (self.number_ranges() as u8).to_bytes(buf);
 
         for range in self.ranges.iter() {
-            range.to_bytes(buf, range_size);
+            range.write(buf, range_size);
         }
     }
 
     /// Parses this debug entry from bytes
     ///
     /// Uses the range size specified in the debug section header
-    pub fn from_bytes(source: &mut FileIterator, range_size: IntSize) -> ReadResult<Self> {
+    ///
+    /// The only reason that this can fail is if we run out of bytes
+    pub fn parse(
+        source: &mut BufferIterator,
+        range_size: IntSize,
+    ) -> Result<Self, DebugEntryParseError> {
         let line_number =
-            i16::from_bytes(source).map_err(|_| ReadError::DebugEntryReadError)? as isize;
+            i16::from_bytes(source).map_err(|_| DebugEntryParseError::MissingLineNumber)? as isize;
         let number_ranges =
-            u8::from_bytes(source).map_err(|_| ReadError::DebugEntryReadError)? as usize;
+            u8::from_bytes(source).map_err(|_| DebugEntryParseError::MissingNumRanges)? as usize;
         let mut ranges = Vec::new();
 
-        for _ in 0..number_ranges {
-            let range = DebugRange::from_bytes(source, range_size)?;
+        for i in 0..number_ranges {
+            let range = DebugRange::parse(source, range_size)
+                .map_err(|_| DebugEntryParseError::MissingRange(i))?;
 
             ranges.push(range);
         }
@@ -191,54 +197,47 @@ impl DebugSection {
                 .sum::<usize>()
     }
 
-    /// Converts this debug section into bytes and appends it to the provided buffer.
-    pub fn to_bytes(&self, buf: &mut Vec<u8>) {
+    /// Converts this debug section into bytes and writes it to the provided buffer.
+    pub fn write(&self, buf: &mut Vec<u8>) {
         b'%'.to_bytes(buf);
         b'D'.to_bytes(buf);
 
         (self.range_size as u8).to_bytes(buf);
 
         for entry in self.debug_entries.iter() {
-            entry.to_bytes(buf, self.range_size);
+            entry.write(buf, self.range_size);
         }
+    }
+
+    /// Parses a debug section from bytes
+    pub fn parse(source: &mut BufferIterator) -> Result<Self, DebugSectionParseError> {
+        // This really shouldn't be possible to fail if we wrote this correctly, we wouldn't even be in here
+        assert_eq!(source.next().unwrap(), b'D');
+
+        let raw_range_size =
+            u8::from_bytes(source).map_err(|_| DebugSectionParseError::MissingDebugRangeSize)?;
+        let range_size = IntSize::try_from(raw_range_size)
+            .map_err(|_| DebugSectionParseError::InvalidDebugRangeSize(raw_range_size))?;
+        let mut debug_entries = Vec::new();
+
+        while source.peek().is_some() {
+            let debug_entry = DebugEntry::parse(source, range_size).map_err(|e| {
+                DebugSectionParseError::DebugEntryParseError(source.current_index(), e)
+            })?;
+
+            debug_entries.push(debug_entry);
+        }
+
+        Ok(Self {
+            range_size,
+            debug_entries,
+        })
     }
 }
 
 impl Default for DebugSection {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl FromBytes for DebugSection {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self>
-    where
-        Self: Sized,
-    {
-        if let Some(next) = source.next() {
-            if next != b'D' {
-                Err(ReadError::ExpectedDebugSectionError(next))
-            } else {
-                let raw_range_size =
-                    u8::from_bytes(source).map_err(|_| ReadError::DebugSectionReadError)?;
-                let range_size = IntSize::try_from(raw_range_size)
-                    .map_err(|_| ReadError::DebugSectionReadError)?;
-                let mut debug_entries = Vec::new();
-
-                while source.peek().is_some() {
-                    let debug_entry = DebugEntry::from_bytes(source, range_size)?;
-
-                    debug_entries.push(debug_entry);
-                }
-
-                Ok(Self {
-                    range_size,
-                    debug_entries,
-                })
-            }
-        } else {
-            Err(ReadError::MissingDebugSectionError)
-        }
     }
 }
 
@@ -261,7 +260,7 @@ mod tests {
         debug_section.add(entry_2);
 
         let mut buffer = Vec::with_capacity(128);
-        debug_section.to_bytes(&mut buffer);
+        debug_section.write(&mut buffer);
 
         assert_eq!(debug_section.size_bytes(), buffer.len());
     }

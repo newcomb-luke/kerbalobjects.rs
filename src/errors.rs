@@ -1,4 +1,4 @@
-//! Errors for reading KSM or KO files
+//! Generic errors while reading KSM or KO files
 use thiserror::Error;
 
 pub use crate::ksm::errors::*;
@@ -6,50 +6,52 @@ pub use crate::ksm::errors::*;
 /// The result of attempting to read an object file, KO or KSM. The error type is a ReadError
 pub type ReadResult<T> = Result<T, ReadError>;
 
+/// An error type that describes an error while just parsing a KOSValue
+#[derive(Debug, Error, Copy, Clone)]
+pub enum KOSValueParseError {
+    /// Error running out of bytes while reading KOSValue
+    #[error("EOF reached while parsing KOSValue")]
+    EOF,
+    /// Error reading invalid KOSValue type
+    #[error("Invalid KOSValue type: {0}")]
+    InvalidType(u8),
+}
+
+#[allow(missing_docs)]
+/// An error type that describes an error while just reading a KOSValue
+#[derive(Debug, Error, Copy, Clone)]
+pub enum KOSValueReadError {
+    #[error("EOF reached while reading KOSValue")]
+    EOF,
+    #[error("Invalid KOSValue type: {0}")]
+    InvalidType(u8),
+}
+
+#[allow(missing_docs)]
+/// An error type that describes an error while just reading an Opcode
+#[derive(Debug, Error, Copy, Clone)]
+pub enum OpcodeReadError {
+    #[error("EOF reached while reading Opcode")]
+    EOF,
+    #[error("Invalid Opcode: {0}")]
+    InvalidOpcode(u8),
+}
+
+/// An error type that describes an error while just parsing an Opcode
+#[derive(Debug, Error, Copy, Clone)]
+pub enum OpcodeParseError {
+    /// Error running out of bytes while reading instruction opcode
+    #[error("EOF reached while parsing opcode")]
+    EOF,
+    /// Error reading invalid instruction opcode
+    #[error("Invalid opcode: {0}")]
+    InvalidOpcode(u8),
+}
+
 #[allow(missing_docs)]
 /// An error type which encompasses reading KSM and KO files.
 #[derive(Debug, Error)]
 pub enum ReadError {
-    #[error("Error reading Kerbal Machine Code file")]
-    KSMReadError(#[from] KSMReadError),
-    #[error("Error reading file, unexpected EOF.")]
-    UnexpectedEOF,
-    #[error("Error reading opcode for instruction, ran out of bytes.")]
-    OpcodeReadError,
-    #[error("Error reading opcode for instruction, value {0:x} is not a valid opcode.")]
-    BogusOpcodeReadError(u8),
-    #[error("Error reading operand for instruction, ran out of bytes.")]
-    OperandReadError,
-    #[error("Error reading symbol binding, ran out of bytes.")]
-    SymBindReadError,
-    #[error("Error reading symbol binding, unknown binding with value {0:x}")]
-    UnknownSimBindReadError(u8),
-    #[error("Error reading symbol type, ran out of bytes.")]
-    SymTypeReadError,
-    #[error("Error reading symbol type, unknown type with value {0:x}.")]
-    UnknownSimTypeReadError(u8),
-    #[error("Error reading symbol while parsing constant for {0}, ran out of bytes.")]
-    KOSymbolConstantReadError(&'static str),
-    #[error("Error reading kOS value, unknown type with value {0:x}.")]
-    KOSValueTypeReadError(u8),
-    #[error("Error reading kOS value, ran out of bytes.")]
-    KOSValueReadError,
-    #[error("Error reading section kind, ran out of bytes.")]
-    SectionKindReadError,
-    #[error("Error reading section kind, unknown kind with value {0:x}")]
-    UnknownSectionKindReadError(u8),
-    #[error("Error reading section header while parsing constant {0}, ran out of bytes.")]
-    SectionHeaderConstantReadError(&'static str),
-    #[error("Error reading string table, ran out of bytes.")]
-    StringTableReadError,
-    #[error(
-        "Error reading KerbalObject file header while parsing constant {0}, ran out of bytes."
-    )]
-    KOHeaderReadError(&'static str),
-    #[error(
-        "Error reading kerbal machine code file while parsing constant {0}, ran out of bytes."
-    )]
-    KSMHeaderReadError(&'static str),
     #[error("Error reading KerbalObject file, unsupported KO file version {0}")]
     VersionMismatchError(u8),
     #[error("Error reading KerbalObject file, debug sections are currently unsupported.")]
@@ -100,30 +102,4 @@ pub enum ReadError {
     ExpectedDebugSectionError(u8),
     #[error("Error reading KSM file debug section, ran out of bytes.")]
     DebugSectionReadError,
-}
-
-#[allow(missing_docs)]
-/// An error for simply reading a KOSvalue
-#[derive(Debug, Error)]
-pub enum KOSValueReadError {
-    #[error("boolean")]
-    BoolReadError,
-    #[error("unsigned byte")]
-    U8ReadError,
-    #[error("signed byte")]
-    I8ReadError,
-    #[error("unsigned 16-bit integer")]
-    U16ReadError,
-    #[error("signed 16-bit integer")]
-    I16ReadError,
-    #[error("unsigned 32-bit integer")]
-    U32ReadError,
-    #[error("signed 32-bit integer")]
-    I32ReadError,
-    #[error("float")]
-    F32ReadError,
-    #[error("double")]
-    F64ReadError,
-    #[error("string")]
-    StringReadError,
 }
