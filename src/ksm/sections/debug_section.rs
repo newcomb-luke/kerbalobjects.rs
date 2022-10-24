@@ -1,4 +1,12 @@
 //! A module describing a debug section in a KSM file
+//!
+//! The section of a KSM file that is dedicated to presenting (somewhat) better error messages
+//! to the user of the program. This section maps source code lines to ranges of bytes in the file.
+//!
+//! If an error occurs in a part of the code section, if it is
+//! filled with instructions, that is not mentioned in the debug section, kOS will say "maybe the error really is internal", so
+//! if you can, provide valid debug sections.
+//!
 use crate::{BufferIterator, DebugEntryParseError, DebugSectionParseError, FromBytes, ToBytes};
 
 use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
@@ -158,7 +166,11 @@ impl DebugEntry {
 /// The section of a KSM file that is dedicated to presenting (somewhat) better error messages
 /// to the user of the program. This section maps source code lines to ranges of bytes in the file.
 ///
-#[derive(Debug)]
+/// If an error occurs in a part of the code section, if it is
+/// filled with instructions, that is not mentioned in the debug section, kOS will say "maybe the error really is internal", so
+/// if you can, provide valid debug sections.
+///
+#[derive(Debug, Clone)]
 pub struct DebugSection {
     range_size: IntSize,
     debug_entries: Vec<DebugEntry>,
@@ -168,8 +180,33 @@ impl DebugSection {
     // 2 for the %D that goes before the section, 1 for the range size
     const BEGIN_SIZE: usize = 3;
 
-    /// Creates a new empty debug section, defaulting to a debug range size of 1 byte
-    pub fn new() -> Self {
+    /// Creates a new debug section, adding the provided entry as the first (mandatory) debug entry.
+    ///
+    /// All debug sections in a KSM file must have at least one DebugEntry, or kOS will emit a really
+    /// difficult to debug error while trying to load your file.
+    ///
+    /// If you are aware of this, there is the method [new_empty](Self::new_empty) which can be used
+    /// if you require creating the section before appending to it.
+    ///
+    pub fn new(first_entry: DebugEntry) -> Self {
+        let mut section = Self {
+            range_size: IntSize::One,
+            debug_entries: Vec::with_capacity(1),
+        };
+
+        // This does the range size checking for us
+        section.add(first_entry);
+
+        section
+    }
+
+    /// Creates a new **empty** debug section, defaulting to a debug range size of 1 byte
+    ///
+    /// Use of this method is *discouraged* unless you already know that all debug sections
+    /// in order to not have a really hard to debug kOS error *must* have at least one DebugEntry.
+    ///
+    /// The method designed to help you remember to do that is the normal [new](Self::new).
+    pub fn new_empty() -> Self {
         Self {
             range_size: IntSize::One,
             debug_entries: Vec::new(),
@@ -260,15 +297,30 @@ impl DebugSection {
     }
 }
 
-impl Default for DebugSection {
-    fn default() -> Self {
-        Self::new()
+impl FromIterator<DebugEntry> for DebugSection {
+    fn from_iter<T: IntoIterator<Item = DebugEntry>>(iter: T) -> Self {
+        Self::new_empty().with_entries(iter)
     }
 }
 
-impl FromIterator<DebugEntry> for DebugSection {
-    fn from_iter<T: IntoIterator<Item = DebugEntry>>(iter: T) -> Self {
-        Self::new().with_entries(iter)
+#[cfg(test)]
+impl PartialEq for DebugSection {
+    fn eq(&self, other: &Self) -> bool {
+        if self.size_bytes() != other.size_bytes() {
+            return false;
+        }
+
+        if self.range_size != other.range_size {
+            return false;
+        }
+
+        for (value1, value2) in self.debug_entries.iter().zip(other.debug_entries.iter()) {
+            if value1 != value2 {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
@@ -278,14 +330,14 @@ mod tests {
 
     #[test]
     fn size() {
-        let mut debug_section = DebugSection::new();
+        let mut debug_section = DebugSection::new_empty();
 
-        let mut entry_1 = DebugEntry::new(1);
-        entry_1.add(DebugRange::new(0x04, 0x16));
+        let entry_1 = DebugEntry::new(1).with_range(DebugRange::new(0x04, 0x16));
 
-        let mut entry_2 = DebugEntry::new(2);
-        entry_2.add(DebugRange::new(0x17, 0x19));
-        entry_2.add(DebugRange::new(0x1a, 0x011f));
+        let entry_2 = DebugEntry::new(2).with_ranges(vec![
+            DebugRange::new(0x17, 0x19),
+            DebugRange::new(0x1a, 0x011f),
+        ]);
 
         debug_section.add(entry_1);
         debug_section.add(entry_2);

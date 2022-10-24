@@ -4,7 +4,7 @@ use crate::ksm::IntSize;
 use crate::{BufferIterator, FromBytes, InstrParseError, Opcode, ToBytes};
 
 /// An instruction in a KSM file
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Instr {
     /// An instruction that takes no operands
     ZeroOp(Opcode),

@@ -603,7 +603,7 @@ impl FromBytes for String {
 /// See the [instruction docs](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/Instruction-docs.md) for
 /// more detailed documentation.
 ///
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Opcode {
     /// Specified also in the kOS C# code, represents an unrecognized Opcode
     Bogus,

@@ -49,7 +49,7 @@ impl From<CodeType> for u8 {
 /// All of the function code sections should come first, followed by a required, but possibly
 /// empty Initialization section, followed by a required, but possibly empty Main section.
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CodeSection {
     /// The type of code section that this is
     pub section_type: CodeType,
@@ -159,5 +159,22 @@ impl CodeSection {
             section_type,
             instructions,
         })
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for CodeSection {
+    fn eq(&self, other: &Self) -> bool {
+        if self.section_type != other.section_type {
+            return false;
+        }
+
+        for (value1, value2) in self.instructions.iter().zip(other.instructions.iter()) {
+            if value1 != value2 {
+                return false;
+            }
+        }
+
+        true
     }
 }

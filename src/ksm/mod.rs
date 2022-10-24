@@ -2,24 +2,27 @@
 //!
 //! This module is for describing, reading, and writing Kerbal Machine Code files
 //!
-//! Note that KSMFile::new() will for the most part, if written directly to a file, give you a valid KSM file.
-//! However, that is just in format, and kOS will complain with a horribly unintelligible error message about it.
+//! There **must** be at least a function, initialization, and main section in a KSMFile, and at the
+//! bare minimum the main section should contain at least one instruction.
 //!
 //! There ***must*** be at least one debug entry in the debug section.
+//!
+//! If these are not provided, expect a cryptic "too many arguments were passed to run" error message from
+//! kOS which tells you absolutely nothing about what actually went wrong about loading your file.
 //!
 //! If an error occurs in a part of the code section, if it is
 //! filled with instructions, that is not mentioned in the debug section, kOS will say "maybe the error really is internal", so
 //! if you can, provide valid debug sections.
 //!
+//! There is a builder-style interface for creating a KSMFile documented in the [module](crate::ksm::builder).
+//!
 //! ```
 //! use std::io::Write;
-//! use kerbalobjects::ksm::sections::{CodeSection, CodeType, DebugEntry, DebugRange};
+//! use kerbalobjects::ksm::sections::{ArgumentSection, CodeSection, CodeType, DebugEntry, DebugRange, DebugSection};
 //! use kerbalobjects::ksm::{Instr, KSMFile};
 //! use kerbalobjects::{Opcode, KOSValue, ToBytes};
 //!
-//! let mut ksm_file = KSMFile::new();
-//!
-//! let arg_section = &mut ksm_file.arg_section;
+//! let mut arg_section = ArgumentSection::new();
 //! let mut main_code = CodeSection::new(CodeType::Main);
 //!
 //! let one = arg_section.add_checked(KOSValue::Int16(1));
@@ -36,16 +39,20 @@
 //! main_code.add(Instr::ZeroOp(Opcode::Pop));
 //! main_code.add(Instr::OneOp(Opcode::Escp, one));
 //!
-//! ksm_file.add_code_section(CodeSection::new(CodeType::Function));
-//! ksm_file.add_code_section(CodeSection::new(CodeType::Initialization));
-//! ksm_file.add_code_section(main_code);
+//! let code_sections = vec![
+//!     CodeSection::new(CodeType::Function),
+//!     CodeSection::new(CodeType::Initialization),
+//!     main_code
+//! ];
 //!
 //! // A completely wrong and useless debug section, but we NEED to have one
-//! let mut debug_entry =  DebugEntry::new(1);
-//! debug_entry.add(DebugRange::new(0x06, 0x13));
-//! ksm_file.add_debug_entry(debug_entry);
+//! let mut debug_entry =  DebugEntry::new(1).with_range(DebugRange::new(0x06, 0x13));
+//!
+//! let debug_section = DebugSection::new(debug_entry);
 //!
 //! let mut file_buffer = Vec::with_capacity(2048);
+//!
+//! let ksm_file = KSMFile::new_from_parts(arg_section, code_sections, debug_section);
 //!
 //! ksm_file.write(&mut file_buffer);
 //!
@@ -64,6 +71,9 @@ use crate::BufferIterator;
 use crate::{ksm::sections::CodeSection, FromBytes, HeaderParseError, ToBytes};
 use crate::{KOSValue, KSMParseError};
 
+pub mod builder;
+pub use builder::*;
+
 pub mod errors;
 pub mod sections;
 
@@ -79,7 +89,7 @@ const KSM_MAGIC_NUMBER: u32 = 0x4558036b;
 /// An in-memory representation of a KSM file
 ///
 /// Can be modified, written, or read.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct KSMFile {
     /// This file's header
     pub header: KSMHeader,
@@ -91,17 +101,13 @@ pub struct KSMFile {
 }
 
 impl KSMFile {
-    /// Creates a new KSM file that is empty except for the required argument section, and debug section
-    pub fn new() -> Self {
-        Self {
-            header: KSMHeader::new(),
-            arg_section: ArgumentSection::new(),
-            code_sections: Vec::new(),
-            debug_section: DebugSection::new(),
-        }
-    }
-
     /// Creates a new KSM file using the provided argument section, code sections, and debug section
+    ///
+    /// KSM files to be correctly loaded by kOS without a cryptic error, **must** contain
+    /// at least one entry in the debug section, and a Function code section **first**, followed
+    /// by an Initialization code section, followed by a Main code section with at least **one**
+    /// instruction in it.
+    ///
     pub fn new_from_parts(
         arg_section: ArgumentSection,
         code_sections: Vec<CodeSection>,
@@ -113,6 +119,23 @@ impl KSMFile {
             code_sections,
             debug_section,
         }
+    }
+
+    /// A builder-style method that takes a CodeSection that should be added to this KSMFile
+    pub fn with_code_section(mut self, code_section: CodeSection) -> Self {
+        self.code_sections.push(code_section);
+
+        self
+    }
+
+    /// A builder-style method that takes an iterator of CodeSections that should be added to this KSMFile
+    pub fn with_code_sections(
+        mut self,
+        code_sections: impl IntoIterator<Item = CodeSection>,
+    ) -> Self {
+        self.code_sections.extend(code_sections);
+
+        self
     }
 
     /// A convenience function to add a value to this file's argument section
@@ -223,25 +246,19 @@ impl KSMFile {
     }
 }
 
-impl Default for KSMFile {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// A KSM file header.
 ///
 /// The spec only requires it to contain the file's magic to identify it as a KSM file.
 /// So currently this type isn't extremely useful.
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct KSMHeader {
     magic: u32,
 }
 
 impl KSMHeader {
     /// Creates a new KSM file header
-    pub fn new() -> Self {
-        KSMHeader {
+    pub const fn new() -> Self {
+        Self {
             magic: KSM_MAGIC_NUMBER,
         }
     }
@@ -372,5 +389,26 @@ pub(crate) fn fewest_bytes_to_hold(value: u32) -> IntSize {
         IntSize::Three
     } else {
         IntSize::Four
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for KSMFile {
+    fn eq(&self, other: &Self) -> bool {
+        if self.arg_section != other.arg_section {
+            return false;
+        }
+
+        if self.debug_section != other.debug_section {
+            return false;
+        }
+
+        for (value1, value2) in self.code_sections.iter().zip(other.code_sections.iter()) {
+            if value1 != value2 {
+                return false;
+            }
+        }
+
+        true
     }
 }

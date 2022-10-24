@@ -2,6 +2,7 @@
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
+use kerbalobjects::ksm::sections::{ArgumentSection, DebugSection};
 use kerbalobjects::{
     ksm::{
         sections::{CodeSection, CodeType, DebugEntry, DebugRange},
@@ -105,8 +106,6 @@ fn read_write_ksm() {
 }
 
 fn write_ksm() {
-    let mut ksm = KSMFile::new();
-
     let print = KOSValue::String(String::from("print()"));
 
     let empty = KOSValue::String(String::from(""));
@@ -121,7 +120,7 @@ fn write_ksm() {
 
     let zero = KOSValue::Int16(0);
 
-    let arg_section = &mut ksm.arg_section;
+    let mut arg_section = ArgumentSection::new();
 
     let print_index = arg_section.add(print);
     let empty_index = arg_section.add(empty);
@@ -156,16 +155,15 @@ fn write_ksm() {
     main_section.add(pop_instr);
     main_section.add(end_scope);
 
-    ksm.add_code_section(func_section);
-    ksm.add_code_section(init_section);
-    ksm.add_code_section(main_section);
+    let code_sections = vec![func_section, init_section, main_section];
 
-    let mut debug_entry = DebugEntry::new(1);
-    debug_entry.add(DebugRange::new(6, 0x18));
+    let debug_entry = DebugEntry::new(1).with_range(DebugRange::new(6, 0x18));
 
-    ksm.debug_section.add(debug_entry);
+    let debug_section = DebugSection::new(debug_entry);
 
     let mut file_buffer = Vec::with_capacity(2048);
+
+    let ksm = KSMFile::new_from_parts(arg_section, code_sections, debug_section);
 
     ksm.write(&mut file_buffer);
 

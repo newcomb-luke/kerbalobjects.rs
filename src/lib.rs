@@ -17,13 +17,11 @@
 //! ```
 //! # #[cfg(feature = "ksm")] {
 //! use std::io::Write;
-//! use kerbalobjects::ksm::sections::{CodeSection, CodeType, DebugEntry, DebugRange};
+//! use kerbalobjects::ksm::sections::{ArgumentSection, CodeSection, CodeType, DebugEntry, DebugRange, DebugSection};
 //! use kerbalobjects::ksm::{Instr, KSMFile};
 //! use kerbalobjects::{Opcode, KOSValue, ToBytes};
 //!
-//! let mut ksm_file = KSMFile::new();
-//!
-//! let arg_section = &mut ksm_file.arg_section;
+//! let mut arg_section = ArgumentSection::new();
 //! let mut main_code = CodeSection::new(CodeType::Main);
 //!
 //! let one = arg_section.add_checked(KOSValue::Int16(1));
@@ -40,16 +38,20 @@
 //! main_code.add(Instr::ZeroOp(Opcode::Pop));
 //! main_code.add(Instr::OneOp(Opcode::Escp, one));
 //!
-//! ksm_file.add_code_section(CodeSection::new(CodeType::Function));
-//! ksm_file.add_code_section(CodeSection::new(CodeType::Initialization));
-//! ksm_file.add_code_section(main_code);
+//! let code_sections = vec![
+//!     CodeSection::new(CodeType::Function),
+//!     CodeSection::new(CodeType::Initialization),
+//!     main_code
+//! ];
 //!
 //! // A completely wrong and useless debug section, but we NEED to have one
-//! let mut debug_entry =  DebugEntry::new(1);
-//! debug_entry.add(DebugRange::new(0x06, 0x13));
-//! ksm_file.add_debug_entry(debug_entry);
+//! let mut debug_entry =  DebugEntry::new(1).with_range(DebugRange::new(0x06, 0x13));
+//!
+//! let debug_section = DebugSection::new(debug_entry);
 //!
 //! let mut file_buffer = Vec::with_capacity(2048);
+//!
+//! let ksm_file = KSMFile::new_from_parts(arg_section, code_sections, debug_section);
 //!
 //! ksm_file.write(&mut file_buffer);
 //!

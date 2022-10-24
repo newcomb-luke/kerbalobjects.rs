@@ -90,7 +90,7 @@ impl From<ArgIndex> for usize {
 /// ```
 ///
 /// See the [file format docs](https://github.com/newcomb-luke/kerbalobjects.rs/blob/main/docs/KSM-file-format.md#argument-section) for more details.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArgumentSection {
     num_index_bytes: IntSize,
     hashes: HashMap<u64, ArgIndex>,
@@ -324,6 +324,32 @@ impl ArgumentSection {
         for argument in self.arguments.iter() {
             argument.to_bytes(buf);
         }
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for ArgumentSection {
+    fn eq(&self, other: &Self) -> bool {
+        if self.num_index_bytes != other.num_index_bytes {
+            return false;
+        }
+
+        if self.size_bytes != other.size_bytes {
+            return false;
+        }
+
+        for (value1, value2) in self.arguments.iter().zip(other.arguments.iter()) {
+            let mut hasher1 = std::collections::hash_map::DefaultHasher::new();
+            value1.hash(&mut hasher1);
+            let mut hasher2 = std::collections::hash_map::DefaultHasher::new();
+            value2.hash(&mut hasher2);
+
+            if hasher1.finish() != hasher2.finish() {
+                return false;
+            }
+        }
+
+        true
     }
 }
 
