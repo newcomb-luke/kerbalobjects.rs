@@ -1,8 +1,6 @@
 //! Generic errors while reading KSM or KO files
 use thiserror::Error;
 
-pub use crate::ksm::errors::*;
-
 /// An error type that describes an error while just parsing a KOSValue
 #[derive(Debug, Error, Copy, Clone)]
 pub enum KOSValueParseError {
