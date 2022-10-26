@@ -256,6 +256,9 @@ pub struct KSMHeader {
 }
 
 impl KSMHeader {
+    /// The size of a KSM header in bytes
+    const HEADER_SIZE: usize = 4;
+
     /// Creates a new KSM file header
     pub const fn new() -> Self {
         Self {
@@ -279,6 +282,11 @@ impl KSMHeader {
     /// Appends the byte representation of this file header to a buffer of bytes
     pub fn write(&self, buf: &mut Vec<u8>) {
         self.magic.to_bytes(buf)
+    }
+
+    /// The size in bytes of a KSM file header
+    pub const fn size_bytes(&self) -> usize {
+        Self::HEADER_SIZE
     }
 }
 

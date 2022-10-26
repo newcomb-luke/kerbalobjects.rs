@@ -64,12 +64,14 @@
 //! # Example for Kerbal Object hello world program
 //!
 //! ```
-//! # #[cfg(feature = "ko")] {
+//! # use kerbalobjects::ko::SectionIdx;
+//! use kerbalobjects::ko::sections::DataIdx;
+//! #[cfg(feature = "ko")] {
+//! use kerbalobjects::ko::symbols::{KOSymbol, SymBind, SymType};
+//! use kerbalobjects::ko::{Instr, KOFile};
+//! use kerbalobjects::{KOSValue, Opcode};
 //! use std::io::Write;
 //! use std::path::PathBuf;
-//! use kerbalobjects::ko::{Instr, KOFile};
-//! use kerbalobjects::{KOSValue, Opcode, ToBytes};
-//! use kerbalobjects::ko::symbols::{KOSymbol, SymBind, SymType};
 //!
 //! let mut ko = KOFile::new();
 //!
@@ -81,17 +83,45 @@
 //! // Set up the main code function section
 //! let one = data_section.add_checked(KOSValue::Int16(1));
 //!
-//! start.add(Instr::TwoOp(Opcode::Bscp, one, data_section.add_checked(KOSValue::Int16(0))));
+//! start.add(Instr::TwoOp(
+//!     Opcode::Bscp,
+//!     one,
+//!     data_section.add_checked(KOSValue::Int16(0)),
+//! ));
 //! start.add(Instr::ZeroOp(Opcode::Argb));
-//! start.add(Instr::OneOp(Opcode::Push, data_section.add_checked(KOSValue::ArgMarker)));
-//! start.add(Instr::OneOp(Opcode::Push, data_section.add_checked(KOSValue::StringValue("Hello, world!".into()))));
-//! start.add(Instr::TwoOp(Opcode::Call, data_section.add_checked(KOSValue::String("".into())), data_section.add_checked(KOSValue::String("print()".into()))));
+//! start.add(Instr::OneOp(
+//!     Opcode::Push,
+//!     data_section.add_checked(KOSValue::ArgMarker),
+//! ));
+//! start.add(Instr::OneOp(
+//!     Opcode::Push,
+//!     data_section.add_checked(KOSValue::StringValue("Hello, world!".into())),
+//! ));
+//! start.add(Instr::TwoOp(
+//!     Opcode::Call,
+//!     data_section.add_checked(KOSValue::String("".into())),
+//!     data_section.add_checked(KOSValue::String("print()".into())),
+//! ));
 //! start.add(Instr::ZeroOp(Opcode::Pop));
 //! start.add(Instr::OneOp(Opcode::Escp, one));
 //!
 //! // Set up our symbols
-//! let file_symbol = KOSymbol::new(symstrtab.add("test.kasm"), 0, 0, SymBind::Global, SymType::File, 0);
-//! let start_symbol = KOSymbol::new(symstrtab.add("_start"), 0, start.size() as u16, SymBind::Global, SymType::Func, start.section_index as u16);
+//! let file_symbol = KOSymbol::new(
+//!     symstrtab.add("test.kasm"),
+//!     DataIdx::PLACEHOLDER,
+//!     0,
+//!     SymBind::Global,
+//!     SymType::File,
+//!     SectionIdx::NULL,
+//! );
+//! let start_symbol = KOSymbol::new(
+//!     symstrtab.add("_start"),
+//!     DataIdx::PLACEHOLDER,
+//!     start.size() as u16,
+//!     SymBind::Global,
+//!     SymType::Func,
+//!     start.section_index(),
+//! );
 //!
 //! symtab.add(file_symbol);
 //! symtab.add(start_symbol);
@@ -104,15 +134,15 @@
 //! // Write the file out to disk
 //! let mut file_buffer = Vec::with_capacity(2048);
 //!
-//! let ko = ko.finalize().expect("Could not update KO headers properly");
-//! ko.to_bytes(&mut file_buffer);
+//! let ko = ko.validate().expect("Could not update KO headers properly");
+//! ko.write(&mut file_buffer);
 //!
 //! let file_path = PathBuf::from("test.ko");
 //! let mut file =
-//! std::fs::File::create(file_path).expect("Output file could not be created: test.ko");
+//!     std::fs::File::create(file_path).expect("Output file could not be created: test.ko");
 //!
 //! file.write_all(file_buffer.as_slice())
-//! .expect("File test.ko could not be written to.");
+//!     .expect("File test.ko could not be written to.");
 //! # }
 //! ```
 //!

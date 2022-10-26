@@ -1,10 +1,63 @@
 //! A module describing a data section in a Kerbal Object file
-use crate::ko::sections::SectionIndex;
-use crate::ko::SectionFromBytes;
-use crate::{FileIterator, FromBytes, KOSValue, ReadResult, ToBytes};
+use crate::ko::errors::DataSectionParseError;
+use crate::ko::SectionIdx;
+use crate::{BufferIterator, FromBytes, KOSValue, ToBytes, WritableBuffer};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
+
+/// A wrapper type that represents an index into a data section of a KO file.
+///
+/// This type implements From<usize> and usize implements From<DataIdx>, but this is provided
+/// so that it takes 1 extra step to convert raw integers into DataIdx which could stop potential
+/// logical bugs.
+///
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct DataIdx(u32);
+
+impl From<usize> for DataIdx {
+    fn from(i: usize) -> Self {
+        Self(i as u32)
+    }
+}
+
+impl From<u8> for DataIdx {
+    fn from(i: u8) -> Self {
+        Self(i as u32)
+    }
+}
+
+impl From<u16> for DataIdx {
+    fn from(i: u16) -> Self {
+        Self(i as u32)
+    }
+}
+
+impl From<u32> for DataIdx {
+    fn from(i: u32) -> Self {
+        Self(i)
+    }
+}
+
+impl From<DataIdx> for u32 {
+    fn from(data_idx: DataIdx) -> Self {
+        data_idx.0
+    }
+}
+
+impl From<DataIdx> for usize {
+    fn from(data_idx: DataIdx) -> Self {
+        data_idx.0 as usize
+    }
+}
+
+impl DataIdx {
+    /// A useful constant as a placeholder for an operand that will just be later replaced by a Relocation Data Table entry.
+    /// This is set to u32::MAX because it is highly unlikely that it will actually be a valid index, and possible errors with
+    /// forgetting to include a ReldEntry will be caught when the file is used.
+    pub const PLACEHOLDER: DataIdx = DataIdx(u32::MAX);
+}
 
 /// A data section in a KerbalObject file.
 ///
@@ -18,24 +71,17 @@ use std::slice::Iter;
 ///
 #[derive(Debug)]
 pub struct DataSection {
-    hashes: Vec<u64>,
+    map: HashMap<u64, usize>,
     data: Vec<KOSValue>,
     size: u32,
-    /// The index of this section's section header
-    pub section_index: usize,
-}
-
-impl SectionIndex for DataSection {
-    fn section_index(&self) -> usize {
-        self.section_index
-    }
+    section_index: SectionIdx,
 }
 
 impl DataSection {
     /// Creates a new data section, with the provided section index
-    pub fn new(section_index: usize) -> Self {
+    pub fn new(section_index: SectionIdx) -> Self {
         Self {
-            hashes: Vec::new(),
+            map: HashMap::new(),
             data: Vec::new(),
             size: 0,
             section_index,
@@ -44,54 +90,67 @@ impl DataSection {
 
     /// Creates a new data section with the provided section index, with
     /// internal data structures pre-allocated for the provided amount of items
-    pub fn with_capacity(amount: usize, section_index: usize) -> Self {
+    pub fn with_capacity(amount: usize, section_index: SectionIdx) -> Self {
         Self {
-            hashes: Vec::with_capacity(amount),
+            map: HashMap::with_capacity(amount),
             data: Vec::with_capacity(amount),
             size: 0,
             section_index,
         }
     }
 
-    /// Returns the index into this data section that the first occurrence of a KOSValue resides
-    /// at, or None if no such value is in this section.
-    pub fn find(&self, value: &KOSValue) -> Option<usize> {
+    /// Locates a given value in this data section and returns the index
+    /// if it does exist, or None if it doesn't
+    pub fn position(&self, value: &KOSValue) -> Option<DataIdx> {
         let mut hasher = DefaultHasher::new();
         value.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.hashes.iter().position(|item| *item == hash)
+        self.map
+            .get(&hash)
+            .cloned()
+            .map(|v| DataIdx::from(v as u32))
     }
 
     /// Add a new KOSValue to this data section, checking if it is a duplicate, and
     /// returning the index of the value. If it already exists, the index of that value is
     /// returned, if it does not, then it is added, and the new index is returned.
-    pub fn add_checked(&mut self, value: KOSValue) -> usize {
-        match self.find(&value) {
-            Some(index) => index,
-            None => self.add(value),
+    pub fn add_checked(&mut self, value: KOSValue) -> DataIdx {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        if let Some(i) = self.map.get(&hash) {
+            DataIdx::from(*i)
+        } else {
+            let index = self.data.len();
+
+            self.map.insert(hash, index);
+            self.data.push(value);
+
+            DataIdx::from(index)
         }
     }
 
     /// Unconditionally adds a KOSValue to this data section, and returns the index into this
     /// data section that it resides at
-    pub fn add(&mut self, value: KOSValue) -> usize {
+    pub fn add(&mut self, value: KOSValue) -> DataIdx {
         self.size += value.size_bytes() as u32;
 
         let mut hasher = DefaultHasher::new();
         value.hash(&mut hasher);
         let hash = hasher.finish();
 
-        self.hashes.push(hash);
+        self.map.insert(hash, self.data.len());
         self.data.push(value);
 
-        self.data.len() - 1
+        DataIdx::from(self.data.len() - 1)
     }
 
     /// Gets the KOSValue at the provided index into this data section if it exists,
     /// or None if it does not.
-    pub fn get(&self, index: usize) -> Option<&KOSValue> {
-        self.data.get(index)
+    pub fn get(&self, index: DataIdx) -> Option<&KOSValue> {
+        self.data.get(usize::from(index))
     }
 
     /// Returns an iterator over all KOSValues in this data section
@@ -103,50 +162,46 @@ impl DataSection {
     pub fn size(&self) -> u32 {
         self.size
     }
-}
 
-impl SectionFromBytes for DataSection {
-    fn from_bytes(
-        source: &mut FileIterator,
-        size: usize,
-        section_index: usize,
-    ) -> ReadResult<Self> {
-        let mut read = 0;
+    /// The index of this section's section header
+    pub fn section_index(&self) -> SectionIdx {
+        self.section_index
+    }
+
+    /// Parses a data section from the provided byte buffer
+    pub fn parse(
+        source: &mut BufferIterator,
+        size: u32,
+        section_index: SectionIdx,
+    ) -> Result<Self, DataSectionParseError> {
+        let mut bytes_read = 0;
         let mut data = Vec::new();
-        let mut hashes = Vec::new();
+        let mut map = HashMap::new();
 
-        while read < size {
-            let kos_value = KOSValue::from_bytes(source)?;
-            read += kos_value.size_bytes();
+        while bytes_read < size as usize {
+            let kos_value = KOSValue::from_bytes(source).map_err(|e| {
+                DataSectionParseError::KOSValueParseError(source.current_index(), e)
+            })?;
+            bytes_read += kos_value.size_bytes() as usize;
 
             let mut hasher = DefaultHasher::new();
             kos_value.hash(&mut hasher);
             let hash = hasher.finish();
 
-            hashes.push(hash);
+            map.insert(hash, data.len());
             data.push(kos_value);
         }
 
-        #[cfg(feature = "print_debug")]
-        {
-            println!("Data section:");
-
-            for d in data.iter() {
-                println!("\t{:?}", d);
-            }
-        }
-
-        Ok(DataSection {
-            hashes,
+        Ok(Self {
+            map,
             data,
-            size: size as u32,
+            size,
             section_index,
         })
     }
-}
 
-impl ToBytes for DataSection {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    /// Converts this data section to its binary representation and appends it to the provided buffer
+    pub fn write(&self, buf: &mut impl WritableBuffer) {
         for value in self.data.iter() {
             value.to_bytes(buf);
         }

@@ -60,12 +60,6 @@ impl From<u32> for ArgIndex {
     }
 }
 
-impl From<u64> for ArgIndex {
-    fn from(i: u64) -> Self {
-        Self(i as usize)
-    }
-}
-
 impl From<ArgIndex> for usize {
     fn from(arg_idx: ArgIndex) -> Self {
         arg_idx.0
@@ -339,9 +333,9 @@ impl PartialEq for ArgumentSection {
         }
 
         for (value1, value2) in self.arguments.iter().zip(other.arguments.iter()) {
-            let mut hasher1 = std::collections::hash_map::DefaultHasher::new();
+            let mut hasher1 = DefaultHasher::new();
             value1.hash(&mut hasher1);
-            let mut hasher2 = std::collections::hash_map::DefaultHasher::new();
+            let mut hasher2 = DefaultHasher::new();
             value2.hash(&mut hasher2);
 
             if hasher1.finish() != hasher2.finish() {

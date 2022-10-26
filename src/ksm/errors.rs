@@ -27,7 +27,7 @@ pub enum KSMParseError {
 }
 
 /// An error encountered when parsing a KSM file's header
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Copy, Clone)]
 pub enum HeaderParseError {
     /// Error running out of bytes while reading KSM header
     #[error("End of file reached while reading")]
@@ -38,7 +38,7 @@ pub enum HeaderParseError {
 }
 
 /// An error parsing an argument section
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum ArgumentSectionParseError {
     /// Error running out of bytes while reading argument section header
     #[error("End of file reached. Expected %A")]
@@ -61,7 +61,7 @@ pub enum ArgumentSectionParseError {
 }
 
 /// An error parsing a code section
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum CodeSectionParseError {
     /// Error running out of bytes while reading code section type
     #[error("End of file reached while parsing code section type")]
@@ -78,10 +78,10 @@ pub enum CodeSectionParseError {
 }
 
 /// An error parsing a code section instruction
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum InstrParseError {
     /// Error reading invalid code section instruction opcode
-    #[error("Error reading opcode at byte offset {0}: {1}")]
+    #[error("Error reading opcode at file byte offset {0}: {1}")]
     OpcodeParseError(usize, OpcodeParseError),
     /// Error running out of bytes while reading code section instruction operand
     #[error("Reached EOF while reading operand {0}")]
@@ -89,7 +89,7 @@ pub enum InstrParseError {
 }
 
 /// An error parsing a debug section
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum DebugSectionParseError {
     /// Error reading invalid debug section entry
     #[error("Error while parsing debug entry at offset {0}: {1}")]
@@ -103,7 +103,7 @@ pub enum DebugSectionParseError {
 }
 
 /// An error parsing a debug section entry
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Copy, Clone)]
 pub enum DebugEntryParseError {
     /// Error running out of bytes while reading debug section entry line number
     #[error("Reached EOF while reading line number")]

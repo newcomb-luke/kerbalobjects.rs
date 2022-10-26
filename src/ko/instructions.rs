@@ -1,6 +1,7 @@
 //! kOS instructions as stored in a KO file.
-use crate::errors::ReadError;
-use crate::{FileIterator, FromBytes, Opcode, ReadResult, ToBytes};
+use crate::ko::errors::InstrParseError;
+use crate::ko::sections::DataIdx;
+use crate::{BufferIterator, FromBytes, Opcode, ToBytes, WritableBuffer};
 
 /// An instruction in a KO file
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -8,14 +9,14 @@ pub enum Instr {
     /// An instruction that takes no operands
     ZeroOp(Opcode),
     /// An instruction that takes one operand
-    OneOp(Opcode, usize),
+    OneOp(Opcode, DataIdx),
     /// An instruction that takes two operands
-    TwoOp(Opcode, usize, usize),
+    TwoOp(Opcode, DataIdx, DataIdx),
 }
 
 impl Instr {
     /// Returns the size in bytes that this instruction would take up in a KO file
-    pub fn size_bytes(&self) -> usize {
+    pub fn size_bytes(&self) -> u32 {
         match &self {
             Self::ZeroOp(_) => 1,
             Self::OneOp(_, _) => 5,
@@ -31,42 +32,46 @@ impl Instr {
             Self::TwoOp(opcode, _, _) => *opcode,
         }
     }
-}
 
-impl ToBytes for Instr {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    /// Converts this instruction to its binary representation and appends it to the provided buffer
+    pub fn write(&self, buf: &mut impl WritableBuffer) {
         match self {
             Self::ZeroOp(opcode) => {
                 opcode.to_bytes(buf);
             }
             Self::OneOp(opcode, operand) => {
                 opcode.to_bytes(buf);
-                (*operand as u32).to_bytes(buf);
+                u32::from(*operand).to_bytes(buf);
             }
             Self::TwoOp(opcode, operand1, operand2) => {
                 opcode.to_bytes(buf);
-                (*operand1 as u32).to_bytes(buf);
-                (*operand2 as u32).to_bytes(buf);
+                u32::from(*operand1).to_bytes(buf);
+                u32::from(*operand2).to_bytes(buf);
             }
         }
     }
-}
 
-// TODO: Docs and rewrite
-impl FromBytes for Instr {
-    fn from_bytes(source: &mut FileIterator) -> ReadResult<Self> {
-        let opcode = Opcode::from_bytes(source)?;
+    /// Parses a KO file instruction from the provided buffer
+    pub fn parse(source: &mut BufferIterator) -> Result<Self, InstrParseError> {
+        let opcode = Opcode::from_bytes(source)
+            .map_err(|e| InstrParseError::OpcodeParseError(source.current_index(), e))?;
 
         Ok(match opcode.num_operands() {
             0 => Instr::ZeroOp(opcode),
             1 => {
-                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
-                Instr::OneOp(opcode, op1 as usize)
+                let op1 = DataIdx::from(
+                    u32::from_bytes(source).map_err(|_| InstrParseError::MissingOperand(1))?,
+                );
+                Instr::OneOp(opcode, op1)
             }
             _ => {
-                let op1 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
-                let op2 = u32::from_bytes(source).map_err(|_| ReadError::OperandReadError)?;
-                Instr::TwoOp(opcode, op1 as usize, op2 as usize)
+                let op1 = DataIdx::from(
+                    u32::from_bytes(source).map_err(|_| InstrParseError::MissingOperand(1))?,
+                );
+                let op2 = DataIdx::from(
+                    u32::from_bytes(source).map_err(|_| InstrParseError::MissingOperand(2))?,
+                );
+                Instr::TwoOp(opcode, op1, op2)
             }
         })
     }
@@ -86,10 +91,10 @@ mod tests {
 
     #[test]
     fn write_push() {
-        let instr = Instr::OneOp(Opcode::Push, 1);
+        let instr = Instr::OneOp(Opcode::Push, DataIdx::from(1u32));
         let mut buf = Vec::with_capacity(4);
 
-        instr.to_bytes(&mut buf);
+        instr.write(&mut buf);
 
         assert_eq!(buf, vec![0x4e, 0x01, 0x00, 0x00, 0x00]);
     }

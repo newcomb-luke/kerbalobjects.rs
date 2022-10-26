@@ -183,7 +183,7 @@ impl Default for KSMFileBuilder<completeness::Empty> {
 
 impl KSMFileBuilder {
     /// Creates a new empty KSMFileBuilder
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             argument_section: None,
             code_sections: Vec::new(),

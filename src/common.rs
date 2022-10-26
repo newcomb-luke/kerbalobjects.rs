@@ -69,10 +69,36 @@ impl std::io::Read for BufferIterator<'_> {
     }
 }
 
-/// Allows a type to be converted to bytes and appended to a Vec<u8>
+/// Allows a type to allow a Kerbal Machine Code or Kerbal Object file to be written into it
+pub trait WritableBuffer {
+    /// Notifies this buffer that if it can, it should resize by the *additional* amount
+    /// specified
+    fn allocate_more(&mut self, amount: usize);
+    /// Writes a single byte to this buffer
+    fn write(&mut self, val: u8);
+    /// Writes a byte slice to this buffer
+    fn write_bytes(&mut self, val: &[u8]);
+}
+
+impl WritableBuffer for Vec<u8> {
+    fn allocate_more(&mut self, amount: usize) {
+        // If this panics, we are already screwed
+        self.try_reserve(amount).unwrap();
+    }
+
+    fn write(&mut self, val: u8) {
+        self.push(val);
+    }
+
+    fn write_bytes(&mut self, val: &[u8]) {
+        self.extend_from_slice(val);
+    }
+}
+
+/// Allows a type to be converted to bytes and appended to a WriteableBuffer
 pub trait ToBytes {
     /// Converts a type into bytes and appends it to the buffer.
-    fn to_bytes(&self, buf: &mut Vec<u8>);
+    fn to_bytes(&self, buf: &mut impl WritableBuffer);
 }
 
 /// Allows a type to be converted from bytes from a BufferIterator to itself.
@@ -154,7 +180,7 @@ impl TryFrom<u8> for KOSType {
 }
 
 impl ToBytes for KOSType {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
         (*self as u8).to_bytes(buf);
     }
 }
@@ -296,58 +322,58 @@ impl PartialEq for KOSValue {
 }
 
 impl ToBytes for KOSValue {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
         match self {
             Self::Null => {
-                buf.push(0);
+                buf.write(0);
             }
             Self::Bool(b) => {
-                buf.push(1);
+                buf.write(1);
                 b.to_bytes(buf);
             }
             Self::Byte(b) => {
-                buf.push(2);
+                buf.write(2);
                 b.to_bytes(buf);
             }
             Self::Int16(i) => {
-                buf.push(3);
+                buf.write(3);
                 i.to_bytes(buf);
             }
             Self::Int32(i) => {
-                buf.push(4);
+                buf.write(4);
                 i.to_bytes(buf);
             }
             Self::Float(f) => {
-                buf.push(5);
+                buf.write(5);
                 f.to_bytes(buf);
             }
             Self::Double(f) => {
-                buf.push(6);
+                buf.write(6);
                 f.to_bytes(buf);
             }
             Self::String(s) => {
-                buf.push(7);
-                buf.push(s.len() as u8);
+                buf.write(7);
+                buf.write(s.len() as u8);
                 s.to_bytes(buf);
             }
             Self::ArgMarker => {
-                buf.push(8);
+                buf.write(8);
             }
             Self::ScalarInt(i) => {
-                buf.push(9);
+                buf.write(9);
                 i.to_bytes(buf);
             }
             Self::ScalarDouble(f) => {
-                buf.push(10);
+                buf.write(10);
                 f.to_bytes(buf);
             }
             Self::BoolValue(b) => {
-                buf.push(11);
+                buf.write(11);
                 b.to_bytes(buf);
             }
             Self::StringValue(s) => {
-                buf.push(12);
-                buf.push(s.len() as u8);
+                buf.write(12);
+                buf.write(s.len() as u8);
                 s.to_bytes(buf);
             }
         }
@@ -385,68 +411,68 @@ impl FromBytes for KOSValue {
 }
 
 impl ToBytes for bool {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.push(if *self { 1 } else { 0 });
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write(if *self { 1 } else { 0 });
     }
 }
 
 impl ToBytes for u8 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.push(*self);
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write(*self);
     }
 }
 
 impl ToBytes for i8 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.push((*self) as u8);
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write((*self) as u8);
     }
 }
 
 impl ToBytes for u16 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for i16 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for u32 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for i32 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for f32 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for f64 {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&self.to_le_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(&self.to_le_bytes());
     }
 }
 
 impl ToBytes for &str {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(self.as_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(self.as_bytes());
     }
 }
 
 impl ToBytes for String {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(self.as_bytes());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write_bytes(self.as_bytes());
     }
 }
 
@@ -1056,8 +1082,8 @@ impl From<Opcode> for &str {
 }
 
 impl ToBytes for Opcode {
-    fn to_bytes(&self, buf: &mut Vec<u8>) {
-        buf.push((*self).into());
+    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
+        buf.write((*self).into());
     }
 }
 
