@@ -59,7 +59,7 @@ KO files, like KSM files contain 4 bytes of "magic" that let any program reading
 
 If converted to ASCII, this becomes: k of, with the second byte having a value of 1, and not being ASCII text, just being a 1. Therefore: k1of, or klof. klof stands for Kerbal Linkable Object Format, which is what this format was originally called before being shortened to just KerbalObject files.
 
-The next byte after the first 4 encodes the version of KO file that this is. As of writing this document the version number will always be 3. KerbalObject files have undergone several large revisions before being completely usable externally. This version should be used to identify if this file is still one that can be read correctly.
+The next byte after the first 4 encodes the version of KO file that this is. As of writing this document the version number will always be 4. KerbalObject files have undergone several large revisions before being completely usable externally. This version should be used to identify if this file is still one that can be read correctly.
 
 The next two bytes are a 16 bit unsigned integer that stores the number of entries there will be in the section header table.
 
