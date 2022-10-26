@@ -64,12 +64,12 @@
 //! # Example for Kerbal Object hello world program
 //!
 //! ```
-//! # use kerbalobjects::ko::SectionIdx;
-//! use kerbalobjects::ko::sections::DataIdx;
 //! #[cfg(feature = "ko")] {
 //! use kerbalobjects::ko::symbols::{KOSymbol, SymBind, SymType};
 //! use kerbalobjects::ko::{Instr, KOFile};
 //! use kerbalobjects::{KOSValue, Opcode};
+//! use kerbalobjects::ko::SectionIdx;
+//! use kerbalobjects::ko::sections::DataIdx;
 //! use std::io::Write;
 //! use std::path::PathBuf;
 //!
