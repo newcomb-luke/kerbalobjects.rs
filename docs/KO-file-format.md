@@ -1,9 +1,10 @@
- 
-# KO File Format Documentation 
-* Version 1
-* Written as of July 2021
-  
+# KO File Format Documentation
+
+* Version 2
+* Written as of October 2022
+
 ## Contents
+
 * [Preface](#preface)
 * [About KerbalObjects](#about-kerbalobjects)
 * [Terminology](#terminology)
@@ -17,6 +18,7 @@
 8. [Linking Notes](#linking-notes)
 
 ## Preface
+
 This document is intended to provide anyone with an interest in how KO files are structured with a thorough explanation of exactly how and why each component of the file is there. 
 
 There has been an interest for several years to create a new programming language for Kerbal Operating System, and many would benefit from being a compiled language rather than a transpiled one. This document seeks to be able to provide developers with a strong starting point to be able to begin that undertaking of their own.
@@ -26,6 +28,7 @@ If any parts of this document are outdated or incorrect, please notify us by cre
 There has been a tool created and maintained called [KDump](https://github.com/newcomb-luke/KDump/tree/main), which is the equivalent to KSM and KO files as objdump or readelf are to ELF files. 
 
 ### About KerbalObjects
+
 The Kerbal Object file format was developed to overcome the problem of wanting to make a complex compiled programming language for kOS. KSM files are the equivalent of executable files in real computer programming. But when most compiled languages like C or C++ are turned into binary, they are turned into what are called object files first. These object files store code and other associated information. Each compiled .c or .cpp file is turned into its own separete object file. Then when the programmer wants to create code that can run, a program called a [linker](https://en.wikipedia.org/wiki/Linker_(computing)) is run, which creates the file that can be run, an executable.
 
 kOS does not have a format for object files, only executables. So KerbalObject files were born. They are based on a simplified version of the real-life [ELF file format](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format). These are meant to be read by a specially made linker such as [KLinker](https://github.com/newcomb-luke/kOS-KLinker).
@@ -35,10 +38,12 @@ This makes development for kOS much more like the real-life compiler toolchains,
 KerbalObject files are based on the ELF file format and provide ELF file like capabilities such as symbols, and more sections than KSM files. Mostly though these features allow an assembler targeting KerbalObject files such as [KASM](https://github.com/newcomb-luke/kOS-KASM) to be able to export more advanced formats which are more sophisticated than what can be accomplished with normal kOS files.
 
 ### Terminology
+
 KO - KerbalObject  
 Instruction - One opcode followed by its operands (look up CPU instructions on Wikipedia)  
 
 ## Overview
+
 KerbalObject files consist of a KO header, a section header table, then any number of sections:
 
 * KO header
@@ -63,6 +68,7 @@ The next two bytes store another 16 bit unsigned integer that stores the index i
 Next comes the section header table.
 
 ## Section Header Table
+
 KerbalObject files consist of multiple sections. These sections have types, and can store many different kinds of data. In order to know how to read each of these sections, and where they are in the file, a table of Section Headers are created and stored.
 
 Because the number of entries in the Section Header Table has already been stored, the Section Header Table simply contains those entries. The first Section Header is always a "null header", the format of which will be explained. Each Section Header has the following format:
@@ -73,15 +79,15 @@ Because the number of entries in the Section Header Table has already been store
 
 Here is a table of the currently supported Section Kinds:
 
-| Section Kind | Value |
-| ---          | ---   |
-| Null | 0 |
-| Symbol Table | 1 |
-| String Table | 2 |
-| Function | 3 |
-| Data | 4 |
-| Debug | 5 |
-| Relocation Data | 6 |
+| Section Kind    | Value |
+| --------------- | ----- |
+| Null            | 0     |
+| Symbol Table    | 1     |
+| String Table    | 2     |
+| Function        | 3     |
+| Data            | 4     |
+| Debug           | 5     |
+| Relocation Data | 6     |
 
 * Null - Used only for the first Section Header, the "null header". The null header's name index, section kind, and section size are all 0. This Section Header's index is 0, being the first one in the table. This allows symbols or other constructs that reference a Section Header to specify "none" which is a reference to the null header.
 * Symbol Table - The symbol table contains KO Symbols which are used when a linker is performing relocation on the file. Symbols and relocation will be explained in further sections of these docs.
@@ -93,16 +99,16 @@ Here is a table of the currently supported Section Kinds:
 
 The name index is the index into the *Section Header String Table* that stores the actual string name of this section. The Section Header String Table is a normal string table with a special name. Each section has an associated name. These names are used to identify specifically which section a given section is and how it must be used. A list of currently used special section names is below.
 
-| Section Name | Section Type |
-| ---          | ---          |
-| .shstrtab | String Table |
-| .symtab | Symbol Table |
-| .symstrtab | String Table |
-| .data | Data Section |
-| .reld | Relocation Data Section |
-| .comment | String Table |
-| _init | Function |
-| _start | Function |
+| Section Name | Section Type            |
+| ------------ | ----------------------- |
+| .shstrtab    | String Table            |
+| .symtab      | Symbol Table            |
+| .symstrtab   | String Table            |
+| .data        | Data Section            |
+| .reld        | Relocation Data Section |
+| .comment     | String Table            |
+| _init        | Function                |
+| _start       | Function                |
 
 * .shstrtab - This section marks a specific string table as being the table that all Section Headers' name indexes refer to.
 * .symtab - This section stores symbols that are referred to be instructions and handled during linking.
@@ -116,14 +122,15 @@ The name index is the index into the *Section Header String Table* that stores t
 Each Section Header contains the size of the section in order to know where to start and stop reading certain sections.
 
 ## String Tables
+
 String tables are used to store character strings. Each String Table begins with one byte, with a value of 0x00. This represents a zero-length string, which can be used whenever another part of the KO file wants to express that it has no name, for example. The strings are null-terminated. Unlike in the ELF file format, indexes into the String Table represent which string is being referenced, and not a location in bytes. For example, here is a small list of strings that could represent a String Table:
 
-| Index | String |
-| ---   | ---    |
-| 0 | "" |
-| 1 | "Kerbals" |
-| 2 | "Like" |
-| 3 | "Cake!" |
+| Index | String    |
+| ----- | --------- |
+| 0     | ""        |
+| 1     | "Kerbals" |
+| 2     | "Like"    |
+| 3     | "Cake!"   |
 
 A hexdump of that String Table would look like this:
 
@@ -187,20 +194,20 @@ The symbol binding represents the visibility discussed before, global and local.
 Symbol Binding values:
 
 | Symbol Binding | Value |
-| ---            | ---   |
-| Local | 0 |
-| Global | 1 |
-| Extern | 2 |
+| -------------- | ----- |
+| Local          | 0     |
+| Global         | 1     |
+| Extern         | 2     |
 
 Symbol Type values:
 
 | Symbol Type | Value |
-| ---         | ---   |
-| NoType | 0 |
-| Object | 1 |
-| Func | 2 |
-| Section | 3 |
-| File | 4 |
+| ----------- | ----- |
+| NoType      | 0     |
+| Object      | 1     |
+| Func        | 2     |
+| Section     | 3     |
+| File        | 4     |
 
 * NoType - This symbol represents a value such as the constant 2, or "Hello world".
 * Object - Currently unused, copied from ELF file format.
@@ -220,11 +227,11 @@ Data Section values are indexed similarly to String Tables are. The first value 
 
 An example Data section could be represented like so:
 
-| Index | Value |
-| ---   | ---   |
-| 0 | String("print()") |
-| 1 | Int16(42) |
-| 2 | ScalarIntValue(10000) |
+| Index | Value                 |
+| ----- | --------------------- |
+| 0     | String("print()")     |
+| 1     | Int16(42)             |
+| 2     | ScalarIntValue(10000) |
 
 A hexdump of the Data Section would be:
 
@@ -254,7 +261,7 @@ Instructions that reference KOSymbols should encode that operand as all zeroes. 
 
 Relocation Data Sections store the data required to relocate KOSymbol data to the proper instructions that need them when the KO files are being linked. In simpler terms, when an Instruction needs to reference a symbol in the Symbol Table, instead of the Instruction storing that, this section does. It might be easier to understand if the format for a Relocation Data Entry is shown:
 
-* Section index - 32 bit unsigned integer
+* Section index - 16 bit unsigned integer
 * Instruction index - 32 bit unsigned integer
 * Operand index - 1 byte
 * Symbol index - 32 but unsigned integer
@@ -263,20 +270,21 @@ The section index stores the section to which this relocation applies, which is 
 
 If both of an Instruction's operands reference symbols, two Relocation Data Entries must be created, one for each operand.
 
-An example of a Relocation Data Entry is showm here:
+An example of a Relocation Data Entry is shown here:
 
 ```
-0x07 0x00 0x00 0x00  0x02 0x00 0x00 0x00  0x00  0x01 0x00 0x00 0x00
-^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^   ^^   ^^^^^^^^^^^^^^^^^^^
-    Section 7           Instruction 2     Op 1        Symbol 1
+0x07 0x00  0x02 0x00 0x00 0x00  0x01  0x01 0x00 0x00 0x00
+^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^   ^^   ^^^^^^^^^^^^^^^^^^^
+Section 7     Instruction 2     Op 1        Symbol 1
 ```
 
 ## Linking Notes
+
 A more or less full explanation of the linking process is describe in the docs folder of the KLinker repository. However a small explanation of what happens is provided here.
 
 * Files are read
 * Symbols are resolved
-	* This means that external symbols are found, and replaced with the defined versions.
+  * This means that external symbols are found, and replaced with the defined versions.
 * Functions are given offsets into the file
 * Relocations are preformed, symbols are replaced with their values
 * KSM instructions and Argument Section are generated
