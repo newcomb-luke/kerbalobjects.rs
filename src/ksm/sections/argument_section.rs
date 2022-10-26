@@ -1,7 +1,8 @@
 //! A module describing an argument section in a KSM file
 
+use crate::ksm::errors::ArgumentSectionParseError;
 use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
-use crate::{ArgumentSectionParseError, BufferIterator, FromBytes, KOSValue, ToBytes};
+use crate::{BufferIterator, FromBytes, KOSValue, ToBytes};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};

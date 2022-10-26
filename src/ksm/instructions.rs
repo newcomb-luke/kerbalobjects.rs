@@ -1,7 +1,8 @@
 //! kOS instructions as stored in a KSM file.
+use crate::ksm::errors::InstrParseError;
 use crate::ksm::sections::ArgIndex;
 use crate::ksm::IntSize;
-use crate::{BufferIterator, FromBytes, InstrParseError, Opcode, ToBytes};
+use crate::{BufferIterator, FromBytes, Opcode, ToBytes};
 
 /// An instruction in a KSM file
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

@@ -68,8 +68,8 @@ use flate2::write::GzEncoder;
 use flate2::{read::GzDecoder, Compression};
 
 use crate::BufferIterator;
-use crate::{ksm::sections::CodeSection, FromBytes, HeaderParseError, ToBytes};
-use crate::{KOSValue, KSMParseError};
+use crate::KOSValue;
+use crate::{ksm::sections::CodeSection, FromBytes, ToBytes};
 
 pub mod builder;
 pub use builder::*;
@@ -80,6 +80,7 @@ pub mod sections;
 use sections::{ArgumentSection, DebugSection};
 
 pub mod instructions;
+use crate::ksm::errors::{HeaderParseError, KSMParseError};
 use crate::ksm::sections::{ArgIndex, DebugEntry};
 pub use instructions::Instr;
 

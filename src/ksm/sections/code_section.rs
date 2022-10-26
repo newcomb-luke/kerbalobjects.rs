@@ -1,6 +1,7 @@
 //! A module describing a code section in a KSM file
+use crate::ksm::errors::CodeSectionParseError;
 use crate::ksm::{Instr, IntSize};
-use crate::{BufferIterator, CodeSectionParseError, FromBytes, ToBytes};
+use crate::{BufferIterator, FromBytes, ToBytes};
 use std::slice::Iter;
 
 /// The type of code that a code section is

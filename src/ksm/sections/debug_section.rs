@@ -7,8 +7,9 @@
 //! filled with instructions, that is not mentioned in the debug section, kOS will say "maybe the error really is internal", so
 //! if you can, provide valid debug sections.
 //!
-use crate::{BufferIterator, DebugEntryParseError, DebugSectionParseError, FromBytes, ToBytes};
+use crate::{BufferIterator, FromBytes, ToBytes};
 
+use crate::ksm::errors::{DebugEntryParseError, DebugSectionParseError};
 use crate::ksm::{fewest_bytes_to_hold, read_var_int, write_var_int, IntSize};
 use std::slice::Iter;
 
