@@ -64,7 +64,7 @@
 //! # Example for Kerbal Object hello world program
 //!
 //! ```
-//! #[cfg(feature = "ko")] {
+//! # #[cfg(feature = "ko")] {
 //! use kerbalobjects::ko::symbols::{KOSymbol, SymBind, SymType};
 //! use kerbalobjects::ko::{Instr, KOFile};
 //! use kerbalobjects::{KOSValue, Opcode};
