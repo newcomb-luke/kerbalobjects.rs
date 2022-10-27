@@ -214,13 +214,13 @@ impl KOSymbol {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ReldEntry {
     /// The function section which this relocation applies to
-    section_index: SectionIdx,
+    pub section_index: SectionIdx,
     /// The index of the instruction whose operand needs to be "relocated"
-    instr_index: InstrIdx,
+    pub instr_index: InstrIdx,
     /// The operand of the instruction which needs to be "relocated"
-    operand_index: OperandIndex,
+    pub operand_index: OperandIndex,
     /// The index into the symbol table which should replace this operand
-    symbol_index: SymbolIdx,
+    pub symbol_index: SymbolIdx,
 }
 
 impl ReldEntry {

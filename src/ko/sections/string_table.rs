@@ -117,7 +117,7 @@ impl StringTable {
         hasher.write(s.as_ref().as_bytes());
         let hash = hasher.finish();
 
-        self.map.get(&hash).cloned().map(|v| StringIdx::from(v))
+        self.map.get(&hash).cloned().map(StringIdx::from)
     }
 
     // This doesn't make any sense to have, but I already wrote it
@@ -198,10 +198,9 @@ impl StringTable {
             let mut b = Vec::new();
 
             while read < size {
-                let c = source.next().ok_or(StringTableParseError::EOFError(
-                    source.current_index(),
-                    size,
-                ))?;
+                let c = source
+                    .next()
+                    .ok_or_else(|| StringTableParseError::EOFError(source.current_index(), size))?;
                 read += 1;
 
                 if c == b'\0' {

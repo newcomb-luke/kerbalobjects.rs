@@ -196,6 +196,28 @@ mod tests {
     }
 
     #[test]
+    fn strtab_read_write() {
+        let mut strtab = StringTable::with_capacity(2, SectionIdx::NULL);
+
+        strtab.add("strings");
+        strtab.add("in");
+        strtab.add("rust");
+
+        let mut buffer = Vec::new();
+
+        strtab.write(&mut buffer);
+
+        let mut iterator = BufferIterator::new(&buffer);
+
+        let read_strtab =
+            StringTable::parse(&mut iterator, strtab.size(), strtab.section_index()).unwrap();
+
+        for (s1, s2) in strtab.strings().zip(read_strtab.strings()) {
+            assert_eq!(s1, s2);
+        }
+    }
+
+    #[test]
     fn symtab_insert() {
         use crate::ko::symbols::KOSymbol;
 
