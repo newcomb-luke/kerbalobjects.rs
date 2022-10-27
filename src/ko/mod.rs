@@ -664,6 +664,11 @@ impl WritableKOFile {
 
         // Write out all of the sections in order
         for section_index in (0..ko.section_header_count()).map(|i| SectionIdx::from(i as u16)) {
+            if self.0.shstrtab.section_index() == section_index {
+                self.0.shstrtab.write(buf);
+                continue;
+            }
+
             if let Some(section) = ko
                 .str_tabs
                 .iter()
