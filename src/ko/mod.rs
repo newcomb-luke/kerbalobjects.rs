@@ -827,7 +827,7 @@ macro_rules! gen_get_by_name {
 macro_rules! gen_new_section {
     ($(#[$attr:meta])* => $func_name: ident, $section_type: ty, $section_kind: expr) => {
         $(#[$attr])*
-        pub fn $func_name(&mut self, name: &str) -> $section_type {
+        pub fn $func_name(&mut self, name: impl Into<String>) -> $section_type {
             let sh_index = self.new_section_header(name, $section_kind);
             <$section_type>::with_capacity(4, sh_index)
         }
