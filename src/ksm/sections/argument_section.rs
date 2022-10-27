@@ -250,11 +250,6 @@ impl ArgumentSection {
     /// This can fail if the buffer runs out of bytes, or if the argument section is malformed.
     ///
     pub fn parse(source: &mut BufferIterator) -> Result<Self, ArgumentSectionParseError> {
-        #[cfg(feature = "print_debug")]
-        {
-            println!("Reading ArgumentSection");
-        }
-
         let header =
             u16::from_bytes(source).map_err(|_| ArgumentSectionParseError::MissingHeader)?;
 
@@ -269,11 +264,6 @@ impl ArgumentSection {
         let num_index_bytes: IntSize = raw_num_index_bytes
             .try_into()
             .map_err(ArgumentSectionParseError::InvalidNumArgIndexBytes)?;
-
-        #[cfg(feature = "print_debug")]
-        {
-            println!("\tNumber of index bytes: {}", raw_num_index_bytes);
-        }
 
         let mut arg_section = Self {
             num_index_bytes,
@@ -291,11 +281,6 @@ impl ArgumentSection {
                     let argument = KOSValue::from_bytes(source).map_err(|e| {
                         ArgumentSectionParseError::KOSValueParseError(source.current_index(), e)
                     })?;
-
-                    #[cfg(feature = "print_debug")]
-                    {
-                        println!("\tRead argument: {:?}", argument);
-                    }
 
                     arg_section.add(argument);
                 }

@@ -122,11 +122,11 @@ fn write_ksm() {
 
     let mut arg_section = ArgumentSection::new();
 
+    let first_index = arg_section.add(first);
     let print_index = arg_section.add(print);
     let empty_index = arg_section.add(empty);
     let two_index = arg_section.add(two);
     let marker_index = arg_section.add(marker);
-    let first_index = arg_section.add(first);
     let one_index = arg_section.add(one);
     let zero_index = arg_section.add(zero);
 

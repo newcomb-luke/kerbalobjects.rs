@@ -1,6 +1,6 @@
 [package]
 name = "kerbalobjects"
-version = "4.0.0"
+version = "4.0.1"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 edition = "2021"
 license = "GPL-3.0"
@@ -10,7 +10,6 @@ homepage = "https://github.com/newcomb-luke/kerbalobjects.rs"
 
 [features]
 default = ["ksm", "ko"]
-print_debug = []
 ksm = []
 ko = []
 

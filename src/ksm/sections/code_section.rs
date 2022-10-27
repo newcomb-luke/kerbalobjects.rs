@@ -119,20 +119,10 @@ impl CodeSection {
         source: &mut BufferIterator,
         index_bytes: IntSize,
     ) -> Result<Self, CodeSectionParseError> {
-        #[cfg(feature = "print_debug")]
-        {
-            print!("Reading code section, ");
-        }
-
         let raw_section_type =
             u8::from_bytes(source).map_err(|_| CodeSectionParseError::MissingCodeSectionType)?;
         let section_type = CodeType::try_from(raw_section_type)
             .map_err(CodeSectionParseError::InvalidCodeSectionType)?;
-
-        #[cfg(feature = "print_debug")]
-        {
-            println!("{:?}", section_type);
-        }
 
         let mut instructions = Vec::new();
 
@@ -144,11 +134,6 @@ impl CodeSection {
 
                 let instr = Instr::parse(source, index_bytes)
                     .map_err(CodeSectionParseError::InstrParseError)?;
-
-                #[cfg(feature = "print_debug")]
-                {
-                    println!("\tRead instruction {:?}", instr);
-                }
 
                 instructions.push(instr);
             } else {
