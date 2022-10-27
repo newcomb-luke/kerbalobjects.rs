@@ -390,6 +390,12 @@ impl KOFile {
         // should be updated except for the first null section.
         let mut header_set = vec![self.shstrtab.section_index()];
 
+        // Update the .shstrtab
+        self.section_headers
+            .get_mut(usize::from(self.shstrtab.section_index()))
+            .unwrap()
+            .size = self.shstrtab.size();
+
         for i in 0..self.str_tabs.len() {
             let section = self.str_tabs.get(i).unwrap();
             let idx = section.section_index();
@@ -571,7 +577,7 @@ impl KOFile {
             .map_err(KOParseError::StringTableParseError)?;
 
         // We skip the first one here since, there is no 0th section
-        for section_idx in (1..section_headers.len() as u16).map(|i| SectionIdx::from(i)) {
+        for section_idx in (1..section_headers.len() as u16).map(SectionIdx::from) {
             // We've already parsed the .shstrtab
             if section_idx == header.shstrtab_idx {
                 continue;
