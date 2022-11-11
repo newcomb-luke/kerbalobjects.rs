@@ -1,21 +1,24 @@
-# KSM File Format Documentation 
+# KSM File Format Documentation
+
 * Version 1.0.1
 * Unofficial, written as of July 2021, Kerbal Operating System release version 1.3.2.0
-  
+
 ## Contents
+
 * [Preface](#preface)
 * [About KSM](#about-ksm)
 * [Terminology](#terminology)
 1. [Overview](#overview)
 2. [Argument Section](#argument-section)
-	* [Arguments](#arguments)
+   * [Arguments](#arguments)
 3. [Code Sections](#code-sections)
-	* [Instructions](#instructions)
+   * [Instructions](#instructions)
 4. [Debug Section](#debug-section)
 5. [Example](#example)
 6. [Notes](#notes)
 
 ## Preface
+
 This document is intended to provide anyone with an interest in how KSM files are structured with a thorough explanation of exactly how and why each component of the file is there. A document like this one exists currently within the kOS GitHub repository, however it is outdated and does not explain specific key details. The [kOS document](https://github.com/KSP-KOS/KOS/blob/develop/src/kOS.Safe/Compilation/CompiledObject-doc.md) also is meant for developers of kOS who are already familiar with the internal code that handles KSM, while this and accompanying documents are designed to be able to be used by someone who is not very familiar with how kOS works internally at all.
 
 There has been an interest for several years to create a new programming language for kOS, and many would benefit from being a compiled language rather than a transpiled one. This document seeks to be able to provide developers with a strong starting point to be able to begin that undertaking of their own.
@@ -25,17 +28,19 @@ If any parts of this document are outdated or incorrect, please notify us by cre
 There has been a tool created and maintained called [KDump](https://github.com/newcomb-luke/KDump/tree/main), which is the equivalent to KSM and KO files as objdump or readelf are to ELF files. 
 
 ### About KSM
+
 The KerboScript Machine Code file format was developed to overcome the problem of bloated code files filled with comments and repeated data. This data is essential to good programming practices, but is not needed for code execution. This KSM files were created.
 
 KSM files are collections of compiled program data and instructions that is then compressed in GZIP format to further reduce file size.
 
 ### Terminology
+
 KSM - KerboScript Machine Code  
 Instruction - One opcode followed by its operands (look up CPU instructions on Wikipedia)  
 Operand - An index into the argument section that stores the data this instruction references  
 
-
 ## Overview
+
 As mentioned above, KSM files are compressed using GZIP compression. A file stored using GZIP can be identified by the first 4 bytes of the file, also known as the "file magic":
 `0x1f 0x8b 0x08 0x00`, or in decimal `31, 139, 8, 0`.
 
@@ -44,6 +49,7 @@ Certain GZIP compressors will not output this specific file magic, and instead i
 KSM files can be decompressed using these tools though, and once extracted, can be hexdumped to find the actual contents of the file as described here.
 
 Once decompressed, the file will have the following overall structure:
+
 * KSM file magic
 * Argument Section
 * Code Section(s)
@@ -56,6 +62,7 @@ If converted to ASCII, this becomes: k XE, with the second byte having a value o
 This file magic is directly followed by the argument section
 
 ## Argument Section
+
 The purpose of the argument section is to store all of the constant values that are used by each instruction in the program. This is not usually the way data like this is stored in real-life file formats like ELF, but kOS is not a real-life computer and can do what it wants. The main reason for this is to reduce duplicated values used by instructions, as kOS storage space is much more precious than storage space on your computer.
 
 The argument section has a header, which marks the start of the section and provides necessary information to continue reading the file. The argument section header begins with two ASCII characters:
@@ -70,21 +77,21 @@ After the %A and the index size byte, follow the arguments.
 
 Each argument begins with the argument type. The argument type is 1 byte wide. kOS currently has 13 argument types:
 
-|Name|Byte|Description|
-| --- | --- | --- |
-| Null | 0 | Represents a null value just like in other languages. |
-| Boolean | 1 | Represents true or false. Used for arguments to kOS system calls. |
-| Byte | 2 | Represents a byte. Used for a few kOS system calls. |
-| Int16 | 3 | 16 bit integer. |
-| Int32 | 4 | 32 bit integer. |
-| Float | 5 | 32 bit floating point number. |
-| Double | 6 | 64 bit floating point number. |
-| String | 7 | String. |
-| Argument Marker | 8 | Used to mark the end of function arguments. |
-| Scalar Integer Value | 9 | 32 bit integer. All KerboScript integers. |
-| Scalar Double Value | 10 | Double-precision floating point. All KerboScript floats. |
-| Boolean Value | 11 | Same as above, but a boolean. |
-| String Value | 12 | Same as above, but a string. |
+| Name                 | Byte | Description                                                       |
+| -------------------- | ---- | ----------------------------------------------------------------- |
+| Null                 | 0    | Represents a null value just like in other languages.             |
+| Boolean              | 1    | Represents true or false. Used for arguments to kOS system calls. |
+| Byte                 | 2    | Represents a byte. Used for a few kOS system calls.               |
+| Int16                | 3    | 16 bit integer.                                                   |
+| Int32                | 4    | 32 bit integer.                                                   |
+| Float                | 5    | 32 bit floating point number.                                     |
+| Double               | 6    | 64 bit floating point number.                                     |
+| String               | 7    | String.                                                           |
+| Argument Marker      | 8    | Used to mark the end of function arguments.                       |
+| Scalar Integer Value | 9    | 32 bit integer. All KerboScript integers.                         |
+| Scalar Double Value  | 10   | Double-precision floating point. All KerboScript floats.          |
+| Boolean Value        | 11   | Same as above, but a boolean.                                     |
+| String Value         | 12   | Same as above, but a string.                                      |
 
 In kOS all integer/floating point arguments are stored in little-endian format.
 
@@ -103,6 +110,7 @@ String and String Value are different than other kOS values. The format they are
 The next argument starts right after the last one has ended. A program knows to stop reading the argument section when the next argument's type instead is read as the percent sign character: '%'. This character denotes the start of a code section.
 
 ## Code Sections
+
 A code section does what it says on the tin, it holds the actual code that is executed when you run a program inside of kOS. The first code section always encountered is a function code section, denoted in the file as the characters "%F".
 
 There are 3 types of code sections, function sections, initialization sections, and main sections.
@@ -133,15 +141,16 @@ Directly after the code section header (the percent sign thing), starts the list
 
 Three instructions will be used as examples:
 
-|Instruction|Opcode Value|
-| ---  | --- |
-| Add | 0x3c |
-| Push | 0x4e |
-| Bcsp (Begin scope) | 0x5a |
+| Instruction        | Opcode Value |
+| ------------------ | ------------ |
+| Add                | 0x3c         |
+| Push               | 0x4e         |
+| Bcsp (Begin scope) | 0x5a         |
 
 Some instructions take operands, others do not. One example of an instruction that does not take any operands is the Add instruction. 
 
 Here is an example of a function section that only contains a complete Add intruction:
+
 ```
 0x25 0x46 0x3c
 ^^^  ^^^   ^
@@ -199,7 +208,7 @@ A Debug Entry contains the following data:
 An example would be a debug entry like this:
 
 | Line Number | Number of Ranges | Range 1 |
-| ---         | ---              | ---     |
+| ----------- | ---------------- | ------- |
 | 1           | 1                | 2 - 7   |
 
 This means that the Instructions within the range 2 through 7 make up line 1, and nothing else.
@@ -207,7 +216,7 @@ This means that the Instructions within the range 2 through 7 make up line 1, an
 Or like this for a more complicated source line:
 
 | Line Number | Number of Ranges | Range 1 | Range 2 |
-| ---         | ---              | ---     | ---     |
+| ----------- | ---------------- | ------- | ------- |
 | 3           | 2                | 7 - 8   | 10 - 11 |
 
 This means that the Instructions within range 7 to 8, and 10 to 11, but **not** byte 9 (for whatever reason) make up line 3 of the source.
@@ -229,6 +238,7 @@ Line 3    2 ranges   7 - 8        10 - 11
 The ranges are expressed as *byte indexes* into the KSM file. The index 0 begins at the first byte after the *Argument Section*. And continues on until the Debug Section is reached. That means that all bytes in the file from the Argument Section up to that point are counted, including code section headers like %F and %I%M. So the first valid Instruction index in the file is actually index 2, because it will have come after one code section header. The debug section ends when the end of the file is reached.
 
 ## Example
+
 Here is the full hexdump of the `test.ksm` file provided in the [kerbalobjects.rs repository](https://github.com/newcomb-luke/kerbalobjects.rs):
 
 ```
@@ -246,15 +256,15 @@ The next byte starts the Argument Section data, and is a 7. Going back to the li
 
 Using the kOS value reading logic, we get the following arguments in total:
 
-| Type | Value | Index |
-| ---  | ---   | ---   |
-| String | "print()" | 0x03 |
-| String | "" | 0x0c |
-| Scalar Int Value | 2 | 0x0e |
-| ArgMarker | n/a | 0x13 |
-| String | "@0001" | 0x14 |
-| Int16 | 1 | 0x1b |
-| Int16 | 0 | 0x1e |
+| Type             | Value     | Index |
+| ---------------- | --------- | ----- |
+| String           | "print()" | 0x03  |
+| String           | ""        | 0x0c  |
+| Scalar Int Value | 2         | 0x0e  |
+| ArgMarker        | n/a       | 0x13  |
+| String           | "@0001"   | 0x14  |
+| Int16            | 1         | 0x1b  |
+| Int16            | 0         | 0x1e  |
 
 Then we hit another %-sign and read: %F%I%M. This means that there is an empty function section, empty initialization section, and a main section. Then follow the Instructions.
 
@@ -270,17 +280,17 @@ The next byte after that is 0x5a, which is the opcode for the Begin Scope Instru
 
 Then the rest of the Instructions are read this way:
 
-| Instruction | Operand(s) |
-| ---    | ---        |
-| argb | |
-| push | ArgMarker |
-| push | 2 |
-| push | 2 |
-| add | |
-| call | "", "print()" |
-| pop | |
-| escp | 1 |
- 
+| Instruction | Operand(s)    |
+| ----------- | ------------- |
+| argb        |               |
+| push        | ArgMarker     |
+| push        | 2             |
+| push        | 2             |
+| add         |               |
+| call        | "", "print()" |
+| pop         |               |
+| escp        | 1             |
+
 Wow! Reading through that, this program adds 2 + 2 and prints the result! Sounds like a useful program.
 
 At the end of that, the Debug Section is reached. %D is read, and the next byte after that is a 1, meaning that range indexes will only be 1 byte wide.
@@ -298,4 +308,5 @@ That is quite a large file to store such a simple program. But when the source c
 This concludes the description of the kOS KSM file format.
 
 ## Notes
+
 The best way to get hands-on experience with KSM files is to run the kOS compiler by running `COMPILE (your file).ks.` and looking at the output.
