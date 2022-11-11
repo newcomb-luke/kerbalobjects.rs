@@ -113,7 +113,7 @@ impl SymbolTable {
         self.symbols
             .iter()
             .position(|sym| sym == symbol)
-            .map(|i| SymbolIdx::from(i))
+            .map(SymbolIdx::from)
     }
 
     /// Adds a new symbol to this symbol table, returning the index of the symbol

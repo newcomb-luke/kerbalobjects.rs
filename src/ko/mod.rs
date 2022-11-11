@@ -193,8 +193,6 @@ impl KOFile {
 
         // The first section will always be the section header string table
         kofile.add_section_header(SectionHeader::new(name_idx, SectionKind::StrTab));
-        // Add the section's name to itself
-        kofile.shstrtab.add(".shstrtab");
 
         kofile
     }
@@ -418,6 +416,7 @@ impl KOFile {
             let section = self.data_sections.get(i).unwrap();
             let idx = section.section_index();
             let size = section.size();
+
             header_set.push(idx);
 
             self.update_section_header(SectionKind::Data, idx, size)?;
