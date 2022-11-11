@@ -287,6 +287,28 @@ mod tests {
     }
 
     #[test]
+    fn read_write_data() {
+        let mut buffer = Vec::new();
+
+        let mut data_section = DataSection::new(SectionIdx::from(2u16));
+
+        data_section.add_checked(KOSValue::ArgMarker);
+        data_section.add_checked(KOSValue::Null);
+        data_section.add_checked(KOSValue::ScalarInt(2));
+        data_section.add_checked(KOSValue::ScalarInt(4));
+        data_section.add_checked(KOSValue::String(String::from("test")));
+
+        data_section.write(&mut buffer);
+
+        let mut iter = BufferIterator::new(&buffer);
+
+        let read =
+            DataSection::parse(&mut iter, data_section.size(), SectionIdx::from(2u16)).unwrap();
+
+        assert_eq!(read, data_section);
+    }
+
+    #[test]
     fn data_get() {
         let mut data_section = DataSection::with_capacity(1, SectionIdx::NULL);
 

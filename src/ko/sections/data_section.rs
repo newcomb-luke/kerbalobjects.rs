@@ -123,6 +123,8 @@ impl DataSection {
         if let Some(i) = self.map.get(&hash) {
             DataIdx::from(*i)
         } else {
+            self.size += value.size_bytes() as u32;
+
             let index = self.data.len();
 
             self.map.insert(hash, index);
@@ -205,5 +207,22 @@ impl DataSection {
         for value in self.data.iter() {
             value.to_bytes(buf);
         }
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for DataSection {
+    fn eq(&self, other: &Self) -> bool {
+        if self.data().count() != other.data().count() {
+            return false;
+        }
+
+        for (r, h) in self.data().zip(other.data()) {
+            if r != h {
+                return false;
+            }
+        }
+
+        true
     }
 }

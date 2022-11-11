@@ -283,3 +283,33 @@ impl ReldEntry {
         u32::from(self.symbol_index).to_bytes(buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::ko::sections::{DataIdx, StringIdx};
+    use crate::ko::symbols::{KOSymbol, SymBind, SymType};
+    use crate::ko::SectionIdx;
+    use crate::BufferIterator;
+
+    #[test]
+    fn read_write_symbol() {
+        let mut buffer = Vec::new();
+
+        let symbol = KOSymbol::new(
+            StringIdx::from(23u32),
+            DataIdx::from(42u32),
+            45,
+            SymBind::Global,
+            SymType::Func,
+            SectionIdx::from(2u16),
+        );
+
+        symbol.write(&mut buffer);
+
+        let mut iter = BufferIterator::new(&buffer);
+
+        let read = KOSymbol::parse(&mut iter).unwrap();
+
+        assert_eq!(symbol, read);
+    }
+}
