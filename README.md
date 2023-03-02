@@ -6,7 +6,7 @@
 [<img alt="License" src="https://img.shields.io/github/license/newcomb-luke/kerbalobjects.rs?style=for-the-badge" height="20">]()
 [<img alt="Crates.io Downloads" src="https://img.shields.io/crates/d/kerbalobjects?style=for-the-badge" height="20">]()
 
-[<img alt="GitHub Workflow Status" src="https://img.shields.io/github/workflow/status/newcomb-luke/kerbalobjects.rs/Rust%20CI?style=for-the-badge" height="20">]()
+[<img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/newcomb-luke/kerbalobjects.rs/main.yml?style=for-the-badge" height="20">]()
 [<img alt="Libraries.io dependency status for GitHub repo" src="https://img.shields.io/librariesio/github/newcomb-luke/kerbalobjects.rs?style=for-the-badge" height="20">](https://deps.rs/repo/github/newcomb-luke/kerbalobjects.rs)
 
 A Rust crate that allows anyone to read or write a Kerbal Machine Code file or Kerbal Object file.
