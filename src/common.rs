@@ -321,6 +321,8 @@ impl PartialEq for KOSValue {
     }
 }
 
+impl Eq for KOSValue {}
+
 impl ToBytes for KOSValue {
     fn to_bytes(&self, buf: &mut impl WritableBuffer) {
         match self {
