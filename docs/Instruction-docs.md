@@ -193,6 +193,16 @@ Stack argument - an argument to an instruction stored on the stack
 | KASM Mnemonic | jmp |
 | Description | Unconditionally branches to the given destination. If the integer destination is provided, this represents a *relative* branch. If the value is 3, this will branch 3 instructions "down", and -3 is 3 instructions up. |
 
+### JumpStack / Unconditional Branch from Stack
+
+|  |  |
+| -------- | ----- |
+| Opcode | 0x63 |
+| Operands | None |
+| Stack Argument 1 | (Int32) Location of the jump |
+| KASM Mnemonic | jmps |
+| Description | Unconditionally branches to the given destination. Destination is provided via a stack argument allowing arbitrary jumps at runtime. |
+
 ### Add
 
 |  |  |
