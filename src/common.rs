@@ -762,6 +762,9 @@ pub enum Opcode {
     /// by kOS, and should always be replaced with a regular Opcode::Push. This exists to be a
     /// special instruction that pushes the "Value" version of an argument.
     Pushv,
+
+    /// Jumps to an arbitrary Instruction Pointer specified by an int32 on the top of the stack.
+    Jmps,
 }
 
 impl Opcode {
@@ -779,6 +782,7 @@ impl Opcode {
             Opcode::Sidx => 0,
             Opcode::Bfa => 1,
             Opcode::Jmp => 1,
+            Opcode::Jmps => 0,
             Opcode::Add => 0,
             Opcode::Sub => 0,
             Opcode::Mul => 0,
@@ -881,6 +885,7 @@ impl From<u8> for Opcode {
             0x60 => Opcode::Argb,
             0x61 => Opcode::Targ,
             0x62 => Opcode::Tcan,
+            0x63 => Opcode::Jmps,
 
             0xce => Opcode::Prl,
             0xcd => Opcode::Pdrl,
@@ -946,6 +951,7 @@ impl From<Opcode> for u8 {
             Opcode::Argb => 0x60,
             Opcode::Targ => 0x61,
             Opcode::Tcan => 0x62,
+            Opcode::Jmps => 0x63,
 
             Opcode::Prl => 0xce,
             Opcode::Pdrl => 0xcd,
@@ -970,6 +976,7 @@ impl From<&str> for Opcode {
             "sidx" => Opcode::Sidx,
             "bfa" => Opcode::Bfa,
             "jmp" => Opcode::Jmp,
+            "jmps" => Opcode::Jmps,
             "add" => Opcode::Add,
             "sub" => Opcode::Sub,
             "mul" => Opcode::Mul,
@@ -1033,6 +1040,7 @@ impl From<Opcode> for &str {
             Opcode::Sidx => "sidx",
             Opcode::Bfa => "bfa",
             Opcode::Jmp => "jmp",
+            Opcode::Jmps => "jmps",
             Opcode::Add => "add",
             Opcode::Sub => "sub",
             Opcode::Mul => "mul",
