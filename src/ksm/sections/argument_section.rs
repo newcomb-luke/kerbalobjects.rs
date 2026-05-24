@@ -231,7 +231,7 @@ impl ArgumentSection {
     }
 
     /// Returns an iterator over all of the KOSValues that are stored in this section.
-    pub fn arguments(&self) -> Iter<KOSValue> {
+    pub fn arguments(&'_ self) -> Iter<'_, KOSValue> {
         self.arguments.iter()
     }
 

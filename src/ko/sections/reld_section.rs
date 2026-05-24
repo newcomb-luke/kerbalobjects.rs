@@ -99,7 +99,7 @@ impl ReldSection {
     }
 
     /// Returns an iterator over all relocation data entries in this section
-    pub fn entries(&self) -> Iter<ReldEntry> {
+    pub fn entries(&'_ self) -> Iter<'_, ReldEntry> {
         self.entries.iter()
     }
 

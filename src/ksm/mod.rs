@@ -150,12 +150,12 @@ impl KSMFile {
     }
 
     /// Returns an iterator over all of the code sections in this file
-    pub fn code_sections(&self) -> Iter<CodeSection> {
+    pub fn code_sections(&'_ self) -> Iter<'_, CodeSection> {
         self.code_sections.iter()
     }
 
     /// Returns a mutable iterator over all of the code sections in this file
-    pub fn code_sections_mut(&mut self) -> IterMut<CodeSection> {
+    pub fn code_sections_mut(&'_ mut self) -> IterMut<'_, CodeSection> {
         self.code_sections.iter_mut()
     }
 

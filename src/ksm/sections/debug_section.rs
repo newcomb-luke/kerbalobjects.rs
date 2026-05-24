@@ -100,7 +100,7 @@ impl DebugEntry {
     }
 
     /// Returns an iterator over each debug range in this entry
-    pub fn ranges(&self) -> Iter<DebugRange> {
+    pub fn ranges(&'_ self) -> Iter<'_, DebugRange> {
         self.ranges.iter()
     }
 
@@ -238,7 +238,7 @@ impl DebugSection {
     }
 
     /// Returns an iterator over all of the debug entries contained within this section
-    pub fn debug_entries(&self) -> Iter<DebugEntry> {
+    pub fn debug_entries(&'_ self) -> Iter<'_, DebugEntry> {
         self.debug_entries.iter()
     }
 
