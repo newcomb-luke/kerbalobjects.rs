@@ -78,7 +78,7 @@ impl CodeSection {
     }
 
     /// Returns an iterator over all of the instructions in this code section
-    pub fn instructions(&self) -> Iter<Instr> {
+    pub fn instructions(&'_ self) -> Iter<'_, Instr> {
         self.instructions.iter()
     }
 

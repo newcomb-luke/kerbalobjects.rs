@@ -156,7 +156,7 @@ impl DataSection {
     }
 
     /// Returns an iterator over all KOSValues in this data section
-    pub fn data(&self) -> Iter<KOSValue> {
+    pub fn data(&'_ self) -> Iter<'_, KOSValue> {
         self.data.iter()
     }
 

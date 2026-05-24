@@ -274,27 +274,27 @@ impl KOFile {
     }
 
     /// Returns an iterator over all of the string tables in this Kerbal Object file
-    pub fn str_tabs(&self) -> Iter<StringTable> {
+    pub fn str_tabs(&'_ self) -> Iter<'_, StringTable> {
         self.str_tabs.iter()
     }
 
     /// Returns an iterator over all of the symbol tables in this Kerbal Object file
-    pub fn sym_tabs(&self) -> Iter<SymbolTable> {
+    pub fn sym_tabs(&'_ self) -> Iter<'_, SymbolTable> {
         self.sym_tabs.iter()
     }
 
     /// Returns an iterator over all of the data sections in this Kerbal Object file
-    pub fn data_sections(&self) -> Iter<DataSection> {
+    pub fn data_sections(&'_ self) -> Iter<'_, DataSection> {
         self.data_sections.iter()
     }
 
     /// Returns an iterator over all of the function sections in this Kerbal Object file
-    pub fn func_sections(&self) -> Iter<FuncSection> {
+    pub fn func_sections(&'_ self) -> Iter<'_, FuncSection> {
         self.func_sections.iter()
     }
 
     /// Returns an iterator over all of the relocation data sections in this Kerbal Object file
-    pub fn reld_sections(&self) -> Iter<ReldSection> {
+    pub fn reld_sections(&'_ self) -> Iter<'_, ReldSection> {
         self.reld_sections.iter()
     }
 
@@ -333,7 +333,7 @@ impl KOFile {
 
     /// Returns an iterator over all section headers in the Kerbal Object file's section
     /// header table
-    pub fn section_headers(&self) -> Iter<SectionHeader> {
+    pub fn section_headers(&'_ self) -> Iter<'_, SectionHeader> {
         self.section_headers.iter()
     }
 

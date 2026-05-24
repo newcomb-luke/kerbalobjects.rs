@@ -136,7 +136,7 @@ impl StringTable {
      */
 
     /// Returns an iterator over all of the strings contained in this string table
-    pub fn strings(&self) -> Iter<String> {
+    pub fn strings(&'_ self) -> Iter<'_, String> {
         self.contents.iter()
     }
 

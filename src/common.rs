@@ -126,7 +126,7 @@ pub enum KOSType {
     Null = 0,
     /// A raw boolean
     Bool = 1,
-    /// A single (signed) byte
+    /// A single (unsigned) byte
     Byte = 2,
     /// A signed 16-bit integer
     Int16 = 3,
@@ -215,8 +215,8 @@ pub enum KOSValue {
     Null,
     /// A boolean. Takes up 2 bytes.
     Bool(bool),
-    /// A signed byte. Takes up 2 bytes.
-    Byte(i8),
+    /// A unsigned byte. Takes up 2 bytes.
+    Byte(u8),
     /// A signed 16-bit integer. Takes up 3 bytes.
     Int16(i16),
     /// A signed 32-bit integer. Takes up 5 bytes.
@@ -396,7 +396,7 @@ impl FromBytes for KOSValue {
         match kos_type {
             KOSType::Null => Ok(KOSValue::Null),
             KOSType::Bool => bool::from_bytes(source).map(KOSValue::Bool),
-            KOSType::Byte => i8::from_bytes(source).map(KOSValue::Byte),
+            KOSType::Byte => u8::from_bytes(source).map(KOSValue::Byte),
             KOSType::Int16 => i16::from_bytes(source).map(KOSValue::Int16),
             KOSType::Int32 => i32::from_bytes(source).map(KOSValue::Int32),
             KOSType::Float => f32::from_bytes(source).map(KOSValue::Float),
@@ -421,12 +421,6 @@ impl ToBytes for bool {
 impl ToBytes for u8 {
     fn to_bytes(&self, buf: &mut impl WritableBuffer) {
         buf.write(*self);
-    }
-}
-
-impl ToBytes for i8 {
-    fn to_bytes(&self, buf: &mut impl WritableBuffer) {
-        buf.write((*self) as u8);
     }
 }
 
@@ -491,14 +485,6 @@ impl FromBytes for u8 {
 
     fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
         source.next().ok_or(())
-    }
-}
-
-impl FromBytes for i8 {
-    type Error = ();
-
-    fn from_bytes(source: &mut BufferIterator) -> Result<Self, Self::Error> {
-        source.next().map(|x| x as i8).ok_or(())
     }
 }
 
@@ -1146,7 +1132,7 @@ mod tests {
     #[test]
     fn byte_to_bytes() {
         let v1 = KOSValue::Byte(0);
-        let v2 = KOSValue::Byte(-128);
+        let v2 = KOSValue::Byte(128);
 
         let mut buf = Vec::with_capacity(2);
 
@@ -1157,7 +1143,7 @@ mod tests {
         buf.clear();
         v2.to_bytes(&mut buf);
 
-        assert_eq!(buf, vec![2, -128i8 as u8]);
+        assert_eq!(buf, vec![2, 128u8]);
     }
 
     #[test]
