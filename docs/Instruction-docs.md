@@ -1,7 +1,7 @@
 # Kerbal Operating System Instructions Documentation
 
-* Version 1.0
-* Unofficial, written as of December 2021, Kerbal Operating System release version 1.3.2.0
+* Version 1.1
+* Unofficial, updated May 2026, originally written December 2021, Kerbal Operating System release version 1.3.2.0
 
 ## Contents
 
@@ -58,9 +58,10 @@
 47. [Argument Bottom](#argument-bottom)
 48. [Test Argument Bottom](#test-argument-bottom)
 49. [Test Trigger Cancelled](#test-trigger-cancelled)
-50. [Push Relocate Later](#push-relocate-later)
-51. [Push Delegate Relocate Later](#push-delegate-relocate-later)
-52. [Label Reset](#label-reset)
+50. [Jump Stack](#jump-stack)
+51. [Push Relocate Later](#push-relocate-later)
+52. [Push Delegate Relocate Later](#push-delegate-relocate-later)
+53. [Label Reset](#label-reset)
 
 ## Preface
 This document is intended to provide a comprehensive list of all current Kerbal Operating System opcodes/instructions and their functions. This guide builds off of many ideas that are introduced in the [KSM File Docs](./KSM-file-format.md). That is the format that these instructions are encoded in. 
@@ -192,16 +193,6 @@ Stack argument - an argument to an instruction stored on the stack
 | Stack Argument 1 | The boolean/value |
 | KASM Mnemonic | jmp |
 | Description | Unconditionally branches to the given destination. If the integer destination is provided, this represents a *relative* branch. If the value is 3, this will branch 3 instructions "down", and -3 is 3 instructions up. |
-
-### JumpStack / Unconditional Branch from Stack
-
-|  |  |
-| -------- | ----- |
-| Opcode | 0x63 |
-| Operands | None |
-| Stack Argument 1 | (Int32) Location of the jump |
-| KASM Mnemonic | jmps |
-| Description | Unconditionally branches to the given destination. Destination is provided via a stack argument allowing arbitrary jumps at runtime. |
 
 ### Add
 
@@ -586,7 +577,17 @@ Stack argument - an argument to an instruction stored on the stack
 | Opcode | 0x62 |
 | Operands | None |
 | KASM Mnemonic | tcan |
-| Description | ests whether or not the current subroutine context on the stack that is being executed right now is one that has been flagged as cancelled by someone having called SubroutineContext.Cancel(). This pushes a True or a False on the stack to provide the answer. This should be the first thing done by triggers that wish to be cancel-able by other triggers.  (For example if someone unlocks steering in one trigger, the steering function should not be run after that even if it had been queued up at the start of this physics tick)  If you are a trigger that wishes to be cancel-able in this fashion, your trigger body should start by first calling this to see if you have been cancelled, and if it returns true, then you should return early without doing the rest of your body. |
+| Description | Tests whether or not the current subroutine context on the stack that is being executed right now is one that has been flagged as cancelled by someone having called SubroutineContext.Cancel(). This pushes a True or a False on the stack to provide the answer. This should be the first thing done by triggers that wish to be cancel-able by other triggers.  (For example if someone unlocks steering in one trigger, the steering function should not be run after that even if it had been queued up at the start of this physics tick)  If you are a trigger that wishes to be cancel-able in this fashion, your trigger body should start by first calling this to see if you have been cancelled, and if it returns true, then you should return early without doing the rest of your body. |
+
+### Jump Stack
+
+|  |  |
+| -------- | ----- |
+| Opcode | 0x63 |
+| Operands | None |
+| Stack Argument 1 | (Int32) Location of the jump |
+| KASM Mnemonic | jmps |
+| Description | Unconditionally branches to the given destination. Destination is provided via a stack argument allowing arbitrary jumps at runtime. |
 
 ### Push Relocate Later
 
@@ -615,4 +616,3 @@ Stack argument - an argument to an instruction stored on the stack
 | Operand 1 | (String) |
 | KASM Mnemonic | lbrt |
 | Description | Most instructions' Label fields are just string-ified numbers for their index position. But sometimes, when they are the entry point for a function call (from a lock expression), the label is an identifier string. When this is the case, then the mere position of the opcode within the program is not enough to store the label. Therefore, for import/export to a KSM file, in this case the numeric label needs to be stored. It is done by creating a dummy instruction that is just a no-op instruction intended to be removed when the program is actually loaded into memory and run. It exists purely to store, as an argument, the label of the next opcode to follow it. See the KSM File Docs for more information. |
-

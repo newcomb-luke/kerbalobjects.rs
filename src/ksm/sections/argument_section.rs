@@ -35,6 +35,11 @@ impl ArgIndex {
     pub fn write(&self, buf: &mut Vec<u8>, index_bytes: IntSize) {
         write_var_int(self.0 as u32, buf, index_bytes);
     }
+
+    /// Converts from a usize into an ArgIndex. Supports usage in const contexts
+    pub const fn from_usize(value: usize) -> Self {
+        Self(value)
+    }
 }
 
 impl From<usize> for ArgIndex {
