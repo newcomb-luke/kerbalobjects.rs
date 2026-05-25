@@ -13,7 +13,7 @@ A Rust crate that allows anyone to read or write a Kerbal Machine Code file or K
 
 ```toml
 [dependencies]
-kerbalobjects = "4.0"
+kerbalobjects = "4.1"
 ```
 
 ## Examples

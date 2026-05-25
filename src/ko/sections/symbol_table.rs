@@ -143,7 +143,7 @@ impl SymbolTable {
     }
 
     /// Returns an iterator over all symbols in this symbol table
-    pub fn symbols(&self) -> Iter<KOSymbol> {
+    pub fn symbols(&'_ self) -> Iter<'_, KOSymbol> {
         self.symbols.iter()
     }
 
