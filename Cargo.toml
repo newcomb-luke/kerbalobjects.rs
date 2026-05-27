@@ -1,6 +1,6 @@
 [package]
 name = "kerbalobjects"
-version = "4.1.0"
+version = "4.1.1"
 authors = ["Luke Newcomb <newcomb.luke@protonmail.com>"]
 edition = "2021"
 license = "GPL-3.0"
