@@ -164,8 +164,8 @@ impl KSMFile {
         self.code_sections.push(code_section);
     }
 
-    /// Parses an entire KSMFile from a byte buffer
-    pub fn parse(source: &mut BufferIterator) -> Result<Self, KSMParseError> {
+    /// Parses an entire KSMFile from a gzipped byte buffer
+    pub fn parse_gzipped(source: &mut BufferIterator) -> Result<Self, KSMParseError> {
         let source_len = source.len();
 
         let mut decoder = GzDecoder::new(source);
@@ -179,36 +179,39 @@ impl KSMFile {
 
         let mut decompressed_source = BufferIterator::new(&decompressed);
 
-        let header =
-            KSMHeader::parse(&mut decompressed_source).map_err(KSMParseError::HeaderError)?;
+        Self::parse_raw(&mut decompressed_source)
+    }
 
-        let arg_section = ArgumentSection::parse(&mut decompressed_source)
-            .map_err(KSMParseError::ArgumentSectionParseError)?;
+    /// Parses an entire KSMFile from a non-gzipped byte buffer
+    pub fn parse_raw(source: &mut BufferIterator) -> Result<Self, KSMParseError> {
+        let header = KSMHeader::parse(source).map_err(KSMParseError::HeaderError)?;
+
+        let arg_section =
+            ArgumentSection::parse(source).map_err(KSMParseError::ArgumentSectionParseError)?;
 
         let mut code_sections = Vec::new();
 
         loop {
             // This is impossible, since we only break from reading the ArgumentSection or a CodeSection when we encounter a `%`
-            assert_eq!(decompressed_source.next().unwrap(), b'%');
+            assert_eq!(source.next().unwrap(), b'%');
 
-            let next = decompressed_source.peek().ok_or_else(|| {
-                KSMParseError::MissingSectionType(decompressed_source.current_index())
-            })?;
+            let next = source
+                .peek()
+                .ok_or_else(|| KSMParseError::MissingSectionType(source.current_index()))?;
 
             // This means the next section is a debug section
             if next == b'D' {
                 break;
             }
 
-            let code_section =
-                CodeSection::parse(&mut decompressed_source, arg_section.num_index_bytes())
-                    .map_err(KSMParseError::CodeSectionParseError)?;
+            let code_section = CodeSection::parse(source, arg_section.num_index_bytes())
+                .map_err(KSMParseError::CodeSectionParseError)?;
 
             code_sections.push(code_section);
         }
 
-        let debug_section = DebugSection::parse(&mut decompressed_source)
-            .map_err(KSMParseError::DebugSectionParseError)?;
+        let debug_section =
+            DebugSection::parse(source).map_err(KSMParseError::DebugSectionParseError)?;
 
         Ok(Self {
             header,

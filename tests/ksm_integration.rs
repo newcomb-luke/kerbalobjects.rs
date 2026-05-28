@@ -42,7 +42,7 @@ fn read_kosos_kash() {
         KOSValue::Int16(3),
     ];
 
-    let ksm = KSMFile::parse(&mut buffer_iter).expect("Error reading KSM file");
+    let ksm = KSMFile::parse_gzipped(&mut buffer_iter).expect("Error reading KSM file");
 
     let mut arg_section_args = ksm.arg_section.arguments();
 
@@ -96,7 +96,7 @@ fn read_kos_ksm() {
 
     let mut buffer_iter = BufferIterator::new(&buffer);
 
-    let _ksm = KSMFile::parse(&mut buffer_iter).expect("Error reading KSM file");
+    let _ksm = KSMFile::parse_gzipped(&mut buffer_iter).expect("Error reading KSM file");
 }
 
 #[test]
@@ -184,5 +184,5 @@ fn read_ksm() {
 
     let mut buffer_iter = BufferIterator::new(&buffer);
 
-    let _ksm = KSMFile::parse(&mut buffer_iter);
+    let _ksm = KSMFile::parse_gzipped(&mut buffer_iter);
 }
